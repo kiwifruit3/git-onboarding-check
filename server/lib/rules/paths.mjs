@@ -7,8 +7,8 @@ const RULES = [
   {
     id: 'windows-drive',
     label: 'Windows 盘符绝对路径',
-    // 前面不能是字母/数字，避免把 https:// 里的 s:/ 误判
-    re: /(?<![A-Za-z0-9_])[A-Za-z]:[\\/][^\s"'`<>|,;)]*/g,
+    // 前面不能是字母/数字（避免把 https:// 里的 s:/ 误判），且盘符后至少要跟一个路径字符
+    re: /(?<![A-Za-z0-9_])[A-Za-z]:[\\/][^\s"'`<>|,;)]+/g,
     severity: 'high',
     docSeverity: 'medium',
     hint: '改为相对路径 / 环境变量 / path.join(__dirname, ...)',
@@ -73,10 +73,15 @@ function severityFor(rule, file) {
   return rule.severity
 }
 
-/** 排除 JS 转义序列（\\u003c 之类）被误判成 UNC 路径 */
-function isEscapedNoise(ruleId, value) {
+/** 排除转义序列与注册表路径被误判成 UNC 共享路径 */
+function isNoiseHit(ruleId, value, line) {
   if (ruleId !== 'windows-unc') return false
-  return /^\\\\[ux][0-9a-f]/i.test(value) || /\\\\[nrtbfv0]/.test(value)
+  if (/^\\\\[ux][0-9a-f]/i.test(value)) return true
+  if (/\\\\[nrtbfv0]/.test(value)) return true
+  // HKCU\Software\Microsoft\Windows\CurrentVersion\... 是注册表路径，不是网络共享
+  if (/\\\\(Software|Microsoft|Windows|CurrentVersion|HKEY|System|Policies)\b/i.test(value)) return true
+  if (/HKCU|HKEY_|reg\s+(query|add)|CurrentVersion/i.test(line)) return true
+  return false
 }
 
 const SEV_WEIGHT = { critical: 30, high: 12, medium: 5, low: 1, info: 0 }
@@ -105,7 +110,7 @@ export function analyzePaths(ctx) {
         while ((m = rule.re.exec(line)) !== null) {
           const value = m[0].trim()
           if (!value || value.length < 3) continue
-          if (isEscapedNoise(rule.id, value)) continue
+          if (isNoiseHit(rule.id, value, line)) continue
           hits.push({
             file: file.path,
             line: i + 1,

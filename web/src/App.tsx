@@ -149,7 +149,7 @@ export default function App() {
                 <Icon name="windows" size={15} /> .bat .cmd .ps1 .vbs
               </li>
               <li>
-                <Icon name="path" size={15} /> C:\ /Users/ 绝对路径
+                <Icon name="path" size={15} /> 盘符 / 用户目录 绝对路径
               </li>
               <li>
                 <Icon name="key" size={15} /> sk- / AKID / Bearer / 私钥
@@ -238,7 +238,7 @@ function HowItWorks() {
     {
       icon: 'path',
       title: '硬编码路径',
-      text: '扫描 C:\\、/Users/、/home/、UNC 共享与 file:// 路径，定位到具体文件与行号。',
+      text: '扫描 Windows 盘符、macOS/Linux 用户目录、UNC 共享与 file:// 路径，定位到具体文件与行号。',
     },
     {
       icon: 'key',

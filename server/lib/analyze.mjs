@@ -14,7 +14,7 @@ import { buildHighlights, computeScore } from './score.mjs'
 import { parseRepoUrl, SEVERITY_ORDER } from './util.mjs'
 import { collectFiles } from './walk.mjs'
 
-export const SCHEMA_VERSION = 6
+export const SCHEMA_VERSION = 7
 const MAX_RISK_ITEMS = 120
 
 function pickRootPackageJson(files) {
