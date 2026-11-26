@@ -366,6 +366,9 @@ git-onboarding-check/
 
 ## 配置项
 
+> **密钥怎么放**：复制 `.env.example` 为 `.env`，把 Key 写进 `.env`（已在 `.gitignore` 中，服务启动时会自动加载）；
+> **不要**把真实 Key 写进 `.env.example`、README 或任何会被提交的文件——GitHub 的密钥检测会直接拦下推送。
+
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |
 | `PORT` | `8787` | 服务端口 |

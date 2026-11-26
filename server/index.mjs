@@ -11,10 +11,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { analyzeRepository } from './lib/analyze.mjs'
 import { aiProviderName } from './lib/ai.mjs'
+import { loadDotEnv } from './lib/env.mjs'
 import { BadInput, RepoAccessError } from './lib/util.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
+// 先把项目根目录的 .env 载入（Key 写在 .env 里，不要写进 .env.example）
+loadDotEnv(path.join(ROOT, '.env'))
 const DIST = path.join(ROOT, 'dist')
 const DEMO_DIR = path.join(ROOT, 'demo', 'reports')
 const PORT = Number(process.env.PORT || 8787)

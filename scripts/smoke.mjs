@@ -3,7 +3,11 @@
  * 命令行体检（也用于开发期回归）：
  *   node scripts/smoke.mjs https://github.com/owner/repo [--refresh] [--json]
  */
+import path from 'node:path'
+import { loadDotEnv } from '../server/lib/env.mjs'
 import { analyzeRepository } from '../server/lib/analyze.mjs'
+
+loadDotEnv(path.resolve(process.cwd(), '.env'))
 
 const args = process.argv.slice(2)
 const url = args.find((a) => !a.startsWith('--'))
