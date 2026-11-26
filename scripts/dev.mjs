@@ -63,7 +63,8 @@ process.on('SIGTERM', shutdown)
 launch('api', [path.join(root, 'server', 'index.mjs')], '36')
 launch('web', [viteBin], '35')
 
+const apiPort = process.env.PORT || 8787
 console.log('\n  RepoPulse 开发模式')
 console.log('  ─────────────────────────────')
-console.log('  前端  http://127.0.0.1:5273')
-console.log('  接口  http://127.0.0.1:8787/api/health\n')
+console.log(`  前端  http://127.0.0.1:5273`)
+console.log(`  接口  http://127.0.0.1:${apiPort}/api/health\n`)
