@@ -410,7 +410,7 @@ npm run clean -- --all
 
 ## 开发过程与 AI 使用
 
-本项目使用 **DeepSeek Harness（DSH）** 作为 AI Coding 工具完成，包含完整的提示词记录、验证方法与「AI 答错但被发现」的真实案例，见 [AI_USAGE.md](AI_USAGE.md)。
+本项目使用 **DeepSeek Harness（DSH）** 作为 AI Coding 工具完成，包含提示词节选、验证方法与 AI 纠错记录，见 [AI_USAGE.md](AI_USAGE.md)。
 
 ## License
 
