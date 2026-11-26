@@ -35,12 +35,10 @@ const TABS = [
 export function ReportView({
   report,
   onRefresh,
-  onAnalyze,
   refreshing,
 }: {
   report: Report
   onRefresh: () => void
-  onAnalyze: (url: string) => void
   refreshing: boolean
 }) {
   const [tab, setTab] = useState('overview')
@@ -104,19 +102,13 @@ export function ReportView({
               {updateInfo.hasUpdate ? `远端有新提交 ${updateInfo.latestShort}` : '已是最新提交'}
             </span>
           )}
-          <button type="button" className="btn-ghost" onClick={doCheckUpdate} disabled={checking || meta.demo}>
+          <button type="button" className="btn-ghost" onClick={doCheckUpdate} disabled={checking}>
             {checking ? '检查中…' : '检查更新'}
           </button>
-          {meta.demo ? (
-            <button type="button" className="btn-ghost primary" onClick={() => onAnalyze(meta.repo.webUrl)}>
-              <Icon name="play" size={15} /> 在线分析此仓库
-            </button>
-          ) : (
-            <button type="button" className="btn-ghost primary" onClick={onRefresh} disabled={refreshing}>
-              <Icon name="refresh" size={16} />
-              {refreshing ? '重新体检中…' : '重新体检'}
-            </button>
-          )}
+          <button type="button" className="btn-ghost primary" onClick={onRefresh} disabled={refreshing}>
+            <Icon name="refresh" size={16} />
+            {refreshing ? '重新体检中…' : '重新体检'}
+          </button>
           <button
             type="button"
             className="btn-ghost"

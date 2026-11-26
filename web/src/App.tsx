@@ -165,6 +165,9 @@ export default function App() {
       const data = await getDemo(id)
       setError(null)
       setReport(data)
+      const url = data.meta.repo.webUrl || `${data.meta.repo.owner}/${data.meta.repo.name}`
+      lastUrl.current = url
+      setInput(url)
       window.scrollTo({ top: 0, behavior: 'smooth' })
     } catch (err: any) {
       setError({ message: err?.message || '示例报告加载失败' })
@@ -291,12 +294,7 @@ export default function App() {
         )}
 
         {!loading && report && (
-          <ReportView
-            report={report}
-            refreshing={refreshing}
-            onRefresh={() => run(lastUrl.current, true)}
-            onAnalyze={(url) => run(url)}
-          />
+          <ReportView report={report} refreshing={refreshing} onRefresh={() => run(lastUrl.current, true)} />
         )}
 
         {!loading && !report && !error && <HowItWorks />}
