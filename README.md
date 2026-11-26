@@ -1,5 +1,7 @@
 # RepoPulse · Git 仓库接入体检
 
+[![CI](https://github.com/kiwifruit3/git-onboarding-check/actions/workflows/ci.yml/badge.svg)](https://github.com/kiwifruit3/git-onboarding-check/actions/workflows/ci.yml)
+
 > 给一个公开仓库链接，10 秒看清它**能不能接**：README / 依赖 / 启动脚本是否齐全、有没有 Windows 专用脚本、有没有硬编码绝对路径、有没有密钥泄露，最后给出一份**接入就绪度评分**和**可执行的整改清单**。
 
 ![首页](docs/screenshots/01-home.png)
@@ -65,6 +67,16 @@ node scripts/smoke.mjs https://github.com/expressjs/express
 node scripts/smoke.mjs https://github.com/owner/repo --json > report.json
 node scripts/smoke.mjs https://github.com/owner/repo --refresh   # 忽略缓存重新分析
 ```
+
+### 测试
+
+```bash
+npm test            # 规则单测：临时构造一个「问题仓库」，断言六类规则命中且证据已脱敏
+npm run typecheck   # TypeScript 类型检查
+npm run build       # 前端构建
+```
+
+`npm test` 不依赖网络，已在 GitHub Actions（Node 18/20/22）中执行。
 
 > Windows 上如果 `npm` 被执行策略拦截，用 `npm.cmd install`，或直接 `node node_modules/vite/bin/vite.js`。
 > 本机 git 配置了失效代理时，工具会自动探测并回退（见[配置项](#配置项)）。
@@ -263,7 +275,9 @@ git-onboarding-check/
 │   └── src/{App.tsx, components/, styles.css, export.ts}
 ├── scripts/
 │   ├── dev.mjs                # 同时拉起 API 与 Vite
+│   ├── test-rules.mjs         # 规则单测（离线，构造问题仓库断言命中）
 │   └── smoke.mjs              # 命令行体检（也可做回归）
+├── .github/workflows/ci.yml   # CI：npm test + 类型检查 + 构建
 ├── docs/screenshots/          # 界面截图
 ├── dist/                      # 构建产物（npm run build）
 ├── AI_USAGE.md
