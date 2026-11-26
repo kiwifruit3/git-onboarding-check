@@ -2,14 +2,31 @@
  * AI 接入建议。
  *
  * 默认使用内置「规则引擎 + 模板」生成建议（无需任何 API Key，离线可用）；
- * 若配置了 OPENAI_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY，则额外调用大模型，
- * 用结构化的扫描结果作为上下文，生成更自然的风险解读与接入步骤。
+ * 配置 OPENAI_API_KEY / DEEPSEEK_API_KEY / DASHSCOPE_API_KEY / OPENCODE_API_KEY 后，
+ * 会额外调用大模型，用结构化的扫描结果作为上下文，生成更自然的风险解读与接入步骤。
+ *
+ * OpenCode Go / Zen 走 OpenAI 兼容网关：
+ *   Go 套餐   https://opencode.ai/inference/go/openai/v1
+ *   Zen 按量  https://opencode.ai/inference/openai/v1
+ * Go 套餐要求带 x-opencode-session 头，这里会自动补上。
  */
 import { SEVERITY_LABEL } from './util.mjs'
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
 
+/** Go 网关要求稳定的会话 ID（用于路由与 prompt 缓存），进程内固定即可 */
+const OPENCODE_SESSION = `ses_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
+
 function detectProvider() {
+  if (process.env.OPENCODE_API_KEY) {
+    return {
+      name: 'opencode',
+      baseUrl: process.env.OPENCODE_BASE_URL || 'https://opencode.ai/inference/go/openai/v1',
+      apiKey: process.env.OPENCODE_API_KEY,
+      model: process.env.OPENCODE_MODEL || 'qwen3.8-flash',
+      opencodeSession: true,
+    }
+  }
   if (process.env.DEEPSEEK_API_KEY) {
     return {
       name: 'deepseek',
@@ -143,12 +160,17 @@ function buildPrompt(report) {
 }
 
 async function callLlm(provider, report) {
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${provider.apiKey}`,
+    // 网关（如 OpenCode Go）要求客户端表明身份，而不是默认的 node/undici UA
+    'User-Agent': 'repo-pulse/1.0 (+https://github.com/kiwifruit3/git-onboarding-check)',
+  }
+  if (provider.opencodeSession) headers['x-opencode-session'] = OPENCODE_SESSION
+
   const res = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${provider.apiKey}`,
-    },
+    headers,
     body: JSON.stringify({
       model: provider.model,
       temperature: 0.2,

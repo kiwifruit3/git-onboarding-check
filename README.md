@@ -113,8 +113,25 @@ npm run build       # 前端构建
 - **未配置任何 LLM Key 时**：AI 页签的内容由**内置规则引擎**按模板从扫描结果拼装（`heuristic-v1`），
   页面徽章显示「内置规则引擎」，并有一块「未启用大模型」的说明，**不是大模型输出**。
 - **配置 Key 后**：自动切换为大模型生成（徽章显示模型名），调用失败自动回退规则引擎，不影响报告。
-- 支持 DeepSeek / 通义千问 / 任意 OpenAI 兼容端点（OpenAI、智谱、Kimi、本地 Ollama）。
+- 支持 DeepSeek / 通义千问 / 任意 OpenAI 兼容端点（OpenAI、智谱、Kimi、本地 Ollama）/ **OpenCode Go / Zen**。
 - 发送给模型的只有**扫描摘要**（评分、风险标题、文件路径、整改建议），不包含源码内容。
+
+### 用 OpenCode Go 订阅跑 AI 建议
+
+OpenCode Go（$10/月）是 OpenAI 兼容网关，可以直接当本工具的 LLM 通道：
+
+```powershell
+$env:OPENCODE_API_KEY="oc_sk_xxxxxxxx"          # Console → Account → Personal API keys
+$env:OPENCODE_MODEL="qwen3.8-flash"             # 从 Console 的 Go 模型列表里挑一个
+npm.cmd start
+```
+
+- **Go 套餐**地址：`https://opencode.ai/inference/go/openai/v1`（默认值，不用配）
+- **Zen 按量**：`$env:OPENCODE_BASE_URL="https://opencode.ai/inference/openai/v1"`
+- 免费模型在 OpenCode 之外会返回 `403`，所以必须用付费 / Go 覆盖的模型
+- Go 要求请求带 `x-opencode-session` 头，工具已自动附带稳定会话 ID；同时会把 UA 标成 `repo-pulse/1.0`
+- 用量受 Go 套餐限额约束（5 小时 20% / 每周 50% / 每月 100%），超出可开 Extra Usage 走 Zen 余额
+- 注意：Go 主要面向编码 agent 流量，本工具是每次体检一次摘要请求，量很小但属于非典型用途；若被限流可换 Zen 或其它通道
 
 ### HTTP API
 
@@ -364,6 +381,8 @@ git-onboarding-check/
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | – | OpenAI 兼容通道，用于 AI 建议 |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | – | DeepSeek 通道 |
 | `DASHSCOPE_API_KEY` / `DASHSCOPE_MODEL` | – | 通义千问兼容模式 |
+| `OPENCODE_API_KEY` / `OPENCODE_MODEL` | – | OpenCode Go / Zen 网关（默认 Go 套餐地址，见下） |
+| `OPENCODE_BASE_URL` | `https://opencode.ai/inference/go/openai/v1` | Go 套餐用这个；Zen 按量改为 `https://opencode.ai/inference/openai/v1` |
 
 示例：`OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start`
 

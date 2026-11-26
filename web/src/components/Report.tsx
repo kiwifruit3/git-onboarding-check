@@ -733,7 +733,11 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_MODEL=gpt-4o-mini
 
 # 方式三：通义千问
-DASHSCOPE_API_KEY=sk-xxxx`}</pre>
+DASHSCOPE_API_KEY=sk-xxxx
+
+# 方式四：OpenCode Go / Zen（Go 套餐用默认地址即可）
+OPENCODE_API_KEY=oc_sk_xxxx
+OPENCODE_MODEL=qwen3.8-flash`}</pre>
           <p className="muted small">
             Windows PowerShell 用 <code className="mono">$env:DEEPSEEK_API_KEY="sk-xxxx"</code> 的形式设置。
             发送给模型的只有扫描摘要（评分、风险标题、文件路径、整改建议），<b>不包含源码内容</b>；
