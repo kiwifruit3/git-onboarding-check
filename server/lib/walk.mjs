@@ -131,6 +131,8 @@ export async function collectFiles(root) {
       const name = entry.name
       const rel = relDir ? `${relDir}/${name}` : name
       if (entry.isSymbolicLink()) continue
+      // 源码快照的完成标记文件，不属于仓库内容
+      if (!relDir && name === '.ready') continue
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(name.toLowerCase())) {
           skippedDirs += 1

@@ -54,11 +54,14 @@ function installCommand(report) {
 
 function startCommand(report) {
   const scripts = report.sections?.scripts?.entries || []
-  const preferred = scripts.find((s) => /^(dev|start|serve)$/.test(s.name))
+  const preferred = scripts.find((s) => /^(start|dev|serve|run|preview)$/.test(s.name))
   if (preferred) return preferred.command
+  const makeRun = scripts.find((s) => /^make (run|dev|start)$/.test(s.name))
+  if (makeRun) return makeRun.command
   const docker = report.sections?.scripts?.docker
   if (docker?.compose) return 'docker compose up'
-  return scripts[0]?.command || '按 README 说明启动'
+  // 库项目通常没有启动脚本，别硬拿 lint/test 当启动命令
+  return '按 README 说明启动（库项目可直接按示例引用）'
 }
 
 /** 无需 API Key 的本地建议生成 */

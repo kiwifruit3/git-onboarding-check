@@ -719,8 +719,36 @@ function AiTab({ report }: { report: Report }) {
           </span>
         }
       />
-      <blockquote className="ai-verdict-block">{ai.verdict}</blockquote>
-      <p className="ai-summary">{ai.summary}</p>
+      {ai.source !== 'llm' && (
+        <div className="ai-setup">
+          <div className="ai-setup-head">
+            <span className="ai-setup-badge">未启用大模型</span>
+            <b>当前建议由内置规则引擎生成，不是大模型输出</b>
+          </div>
+          <p>
+            下面的结论、建议卡片与接入步骤，都是按模板从扫描结果拼装出来的（<code className="mono">heuristic-v1</code>）。
+            配置任意一个 LLM 通道后重启服务，即可切换为真实大模型生成：
+          </p>
+          <pre className="ai-setup-code">{`# 方式一：DeepSeek（推荐，便宜）
+DEEPSEEK_API_KEY=sk-xxxx
+DEEPSEEK_MODEL=deepseek-chat
+
+# 方式二：任意 OpenAI 兼容端点（OpenAI / 智谱 / Kimi / 本地 Ollama）
+OPENAI_API_KEY=sk-xxxx
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_MODEL=gpt-4o-mini
+
+# 方式三：通义千问
+DASHSCOPE_API_KEY=sk-xxxx`}</pre>
+          <p className="muted small">
+            Windows PowerShell 用 <code className="mono">$env:DEEPSEEK_API_KEY="sk-xxxx"</code> 的形式设置。
+            发送给模型的只有扫描摘要（评分、风险标题、文件路径、整改建议），<b>不包含源码内容</b>；
+            调用失败会自动回退到规则引擎，不影响报告。
+          </p>
+        </div>
+      )}
+
+      <blockquote className="ai-verdict-block">{ai.verdict}</blockquote>      <p className="ai-summary">{ai.summary}</p>
       {ai.error && <p className="ai-error">大模型调用失败，已回退到内置建议：{ai.error}</p>}
 
       {ai.advice?.length > 0 && (
