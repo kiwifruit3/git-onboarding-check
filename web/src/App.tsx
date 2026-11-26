@@ -216,7 +216,6 @@ export default function App() {
         <section className={`hero ${report ? 'compact' : ''}`}>
           <div className="hero-glow" aria-hidden />
           <div className="hero-inner">
-            <span className="kicker">GIT ONBOARDING CHECK · 48H CHALLENGE</span>
             <h1>
               给一个仓库链接，
               <br />
