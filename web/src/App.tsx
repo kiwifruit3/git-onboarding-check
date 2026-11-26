@@ -16,12 +16,6 @@ import { ReportView } from './components/Report'
 import { Icon, scoreColor } from './components/ui'
 import type { CacheStats, DemoSummary, HistoryItem, Report } from './types'
 
-const EXAMPLES = [
-  { label: 'expressjs/express', url: 'https://github.com/expressjs/express' },
-  { label: 'redis-windows/redis-windows', url: 'https://github.com/redis-windows/redis-windows' },
-  { label: 'octocat/Hello-World', url: 'https://github.com/octocat/Hello-World' },
-]
-
 const STAGES = [
   '解析仓库地址',
   '读取 HEAD commit',
@@ -244,31 +238,6 @@ export default function App() {
               </button>
             </form>
 
-            <div className="examples">
-              <span>试试：</span>
-              {EXAMPLES.map((e) => (
-                <button key={e.url} type="button" onClick={() => run(e.url)} disabled={loading}>
-                  {e.label}
-                </button>
-              ))}
-            </div>
-
-            {demos.length > 0 && (
-              <div className="demo-strip">
-                <span className="demo-strip-label">
-                  <Icon name="doc" size={13} /> 离线示例（无需网络）
-                </span>
-                {demos.map((d) => (
-                  <button key={d.id} type="button" className="demo-chip" onClick={() => loadDemo(d.id)} disabled={loading}>
-                    <span className="demo-chip-name">{d.slug}</span>
-                    <span className="demo-chip-score" style={{ color: scoreColor(d.score) }}>
-                      {d.score}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-
             <ul className="features">
               <li>
                 <Icon name="doc" size={15} /> README / 依赖 / 启动脚本
@@ -337,6 +306,17 @@ export default function App() {
         <span>
           RepoPulse · 静态扫描，不上传代码 · 评分模型与规则说明见 <code className="mono">README.md</code>
         </span>
+        {demos.length > 0 && (
+          <span className="footer-demos">
+            离线示例：
+            {demos.map((d) => (
+              <button key={d.id} type="button" className="footer-demo-link" onClick={() => loadDemo(d.id)}>
+                {d.slug}
+                <b style={{ color: scoreColor(d.score) }}>{d.score}</b>
+              </button>
+            ))}
+          </span>
+        )}
         <span className="footer-meta">
           Node.js + React · 静态扫描 · 零外部 CDN 依赖
           {cache && cache.totalBytes > 0 && (
