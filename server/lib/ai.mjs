@@ -10,7 +10,8 @@
  *   Zen 按量  https://opencode.ai/inference/openai/v1
  * Go 套餐要求带 x-opencode-session 头，这里会自动补上。
  */
-import { SEVERITY_LABEL } from './util.mjs'
+import { getProxyChoice } from './repo.mjs'
+import { runCommand, SEVERITY_LABEL } from './util.mjs'
 
 const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
 
@@ -159,6 +160,51 @@ function buildPrompt(report) {
   ]
 }
 
+/**
+ * 发送 JSON POST：优先用 Node fetch 直连；
+ * 若直连失败（网络不通 / 被墙），自动用 curl 走本机可用代理重试一次。
+ * 代理探测与拉取源码共用同一套逻辑（环境变量 → git config → 系统代理 → 直连）。
+ */
+async function postJson(url, headers, body) {
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body,
+      signal: AbortSignal.timeout(25_000),
+    })
+    const text = await res.text().catch(() => '')
+    if (!res.ok) throw new Error(`LLM 调用失败 HTTP ${res.status} ${text.slice(0, 200)}`)
+    return text
+  } catch (error) {
+    // 只有网络层失败才回退；HTTP 4xx/5xx 直接抛出（换通道也是同样结果）
+    const networkFailure = !(error instanceof Error) || !/^LLM 调用失败 HTTP/.test(error.message)
+    if (!networkFailure) throw error
+    const proxy = await getProxyChoice()
+    if (!proxy.url) throw error
+    return postJsonViaCurl(url, headers, body, proxy.url)
+  }
+}
+
+async function postJsonViaCurl(url, headers, body, proxyUrl) {
+  const args = ['-sS', '--max-time', '40', '--proxy', proxyUrl, '-X', 'POST', url]
+  for (const [key, value] of Object.entries(headers)) args.push('-H', `${key}: ${value}`)
+  args.push('--data-binary', body)
+  const result = await runCommand('curl', args, { timeout: 60_000 })
+  if (result.code !== 0) {
+    throw new Error(`LLM 请求失败（curl 走代理 ${proxyUrl}）：${result.stderr.slice(0, 200)}`)
+  }
+  const text = result.stdout.trim()
+  try {
+    const parsed = JSON.parse(text)
+    if (parsed?.error) throw new Error(`LLM 调用失败：${JSON.stringify(parsed.error).slice(0, 200)}`)
+    return text
+  } catch (error) {
+    if (error instanceof SyntaxError) throw new Error(`LLM 返回非 JSON：${text.slice(0, 200)}`)
+    throw error
+  }
+}
+
 async function callLlm(provider, report) {
   const headers = {
     'Content-Type': 'application/json',
@@ -168,22 +214,13 @@ async function callLlm(provider, report) {
   }
   if (provider.opencodeSession) headers['x-opencode-session'] = OPENCODE_SESSION
 
-  const res = await fetch(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      model: provider.model,
-      temperature: 0.2,
-      max_tokens: 1200,
-      messages: buildPrompt(report),
-    }),
-    signal: AbortSignal.timeout(25_000),
+  const body = JSON.stringify({
+    model: provider.model,
+    temperature: 0.2,
+    max_tokens: 1200,
+    messages: buildPrompt(report),
   })
-  if (!res.ok) {
-    const text = await res.text().catch(() => '')
-    throw new Error(`LLM 调用失败 HTTP ${res.status} ${text.slice(0, 200)}`)
-  }
-  const data = await res.json()
+  const data = JSON.parse(await postJson(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, headers, body))
   const content = data?.choices?.[0]?.message?.content || ''
   const cleaned = content.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
   const parsed = JSON.parse(cleaned)

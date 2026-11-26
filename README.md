@@ -128,9 +128,13 @@ npm.cmd start
 
 - **Go 套餐**地址：`https://opencode.ai/inference/go/openai/v1`（默认值，不用配）
 - **Zen 按量**：`$env:OPENCODE_BASE_URL="https://opencode.ai/inference/openai/v1"`
+- **DeepSeek 模型**：`OPENCODE_MODEL` 填 `deepseek-v4.1-flash` 或 `deepseek-v4-pro`（以 Console 里显示的 ID 为准）
 - 免费模型在 OpenCode 之外会返回 `403`，所以必须用付费 / Go 覆盖的模型
 - Go 要求请求带 `x-opencode-session` 头，工具已自动附带稳定会话 ID；同时会把 UA 标成 `repo-pulse/1.0`
+- **直连不通怎么办**：工具会先直连，失败时自动用 `curl` 走本机可用代理重试一次（与拉取源码共用代理探测）；
+  也可以显式设置 `$env:HTTPS_PROXY="http://127.0.0.1:7897"` 并用 `node --use-env-proxy server/index.mjs` 启动
 - 用量受 Go 套餐限额约束（5 小时 20% / 每周 50% / 每月 100%），超出可开 Extra Usage 走 Zen 余额
+- 中国大陆访问时，DeepSeek 系列模型需要在 Console 的 **Settings › Privacy › Regions** 里选择 **Global**
 - 注意：Go 主要面向编码 agent 流量，本工具是每次体检一次摘要请求，量很小但属于非典型用途；若被限流可换 Zen 或其它通道
 
 ### HTTP API
