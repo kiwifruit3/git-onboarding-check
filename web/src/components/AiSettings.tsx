@@ -215,7 +215,6 @@ export function AiSettings({
               placeholder="https://api.deepseek.com/v1"
               spellCheck={false}
             />
-            <small className="muted">OpenAI 兼容端点，填到 /v1 为止，不要带 /chat/completions</small>
           </label>
 
           <label className="field">
@@ -237,9 +236,6 @@ export function AiSettings({
               placeholder={keyPlaceholder}
               autoComplete="off"
             />
-            <small className="muted">
-              保存在 <code className="mono">.cache/ai-config.json</code>（已被 git 忽略，不会提交）
-            </small>
           </label>
 
           {testResult && (
