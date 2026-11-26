@@ -45,7 +45,11 @@
 
 ## 快速开始
 
-环境要求：**Node.js ≥ 18.17**、**git**（用于解析仓库 HEAD）。
+### 环境要求
+
+- **Node.js ≥ 18.17**（使用原生 `fetch`、`Readable.fromWeb`）
+- **git**（用于 `git ls-remote` 解析仓库 HEAD）
+- 可访问 github.com / codeload.github.com 的网络（企业网络下工具会自动探测可用代理）
 
 ```bash
 git clone https://github.com/kiwifruit3/git-onboarding-check.git
