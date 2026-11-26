@@ -400,7 +400,7 @@ npm run clean -- --all
 
 ![历史记录](docs/screenshots/07-history.png)
 
-页脚也会显示「本地缓存 xx MB（源码快照 N 份 / 报告 N 份）」，点「清理代码快照」可只清源码不动报告。
+只想清源码快照、保留报告时，用 `npm run clean`（或 `POST /api/cache/clean`）；要连报告一起清空，用历史记录里的「清空全部」或 `npm run clean -- --all`。
 
 > **关于 AI 建议**：未配置大模型时完全离线；配置了 `OPENAI_API_KEY` 等之后，发送给模型的是**扫描结果摘要**
 > （仓库名、评分、风险标题、文件路径、整改建议），**不会发送源码内容**。

@@ -1,10 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   analyze,
-  cleanCache,
   clearHistory,
   deleteHistory,
-  getCacheStats,
   getDemo,
   getHistory,
   getHistoryReport,
@@ -14,7 +12,7 @@ import {
 import { HistoryPanel } from './components/HistoryPanel'
 import { ReportView } from './components/Report'
 import { Icon, scoreColor } from './components/ui'
-import type { CacheStats, DemoSummary, HistoryItem, Report } from './types'
+import type { DemoSummary, HistoryItem, Report } from './types'
 
 const STAGES = [
   '解析仓库地址',
@@ -34,8 +32,6 @@ export default function App() {
   const [error, setError] = useState<{ message: string; hint?: string } | null>(null)
   const [aiInfo, setAiInfo] = useState<{ aiProvider: string | null; version: string } | null>(null)
   const [demos, setDemos] = useState<DemoSummary[]>([])
-  const [cache, setCache] = useState<CacheStats | null>(null)
-  const [cleaning, setCleaning] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -57,30 +53,8 @@ export default function App() {
     listDemos()
       .then(setDemos)
       .catch(() => setDemos([]))
-    getCacheStats()
-      .then(setCache)
-      .catch(() => setCache(null))
     refreshHistory()
   }, [refreshHistory])
-
-  const refreshCache = useCallback(() => {
-    getCacheStats()
-      .then(setCache)
-      .catch(() => setCache(null))
-  }, [])
-
-  const doCleanCache = useCallback(async () => {
-    if (!window.confirm('将删除本机缓存的所有仓库源码快照（报告会保留）。确定继续？')) return
-    setCleaning(true)
-    try {
-      const next = await cleanCache(false)
-      setCache(next)
-    } catch {
-      /* 忽略，下次刷新会重新拉取 */
-    } finally {
-      setCleaning(false)
-    }
-  }, [])
 
   const openHistory = useCallback(() => {
     setHistoryOpen(true)
@@ -106,12 +80,11 @@ export default function App() {
       try {
         await deleteHistory(item.id)
         refreshHistory()
-        refreshCache()
       } catch {
         /* 忽略 */
       }
     },
-    [refreshHistory, refreshCache],
+    [refreshHistory],
   )
 
   const clearAllHistory = useCallback(async () => {
@@ -119,11 +92,10 @@ export default function App() {
     try {
       await clearHistory()
       refreshHistory()
-      refreshCache()
     } catch {
       /* 忽略 */
     }
-  }, [refreshHistory, refreshCache])
+  }, [refreshHistory])
 
   useEffect(() => {
     if (!loading) return
@@ -150,10 +122,9 @@ export default function App() {
     } finally {
       setLoading(false)
       setRefreshing(false)
-      refreshCache()
       refreshHistory()
     }
-  }, [refreshCache, refreshHistory])
+  }, [refreshHistory])
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -304,28 +275,6 @@ export default function App() {
         <span>
           RepoPulse · 静态扫描，不上传代码 · 评分模型与规则说明见 <code className="mono">README.md</code>
         </span>
-        {demos.length > 0 && (
-          <span className="footer-demos">
-            离线示例：
-            {demos.map((d) => (
-              <button key={d.id} type="button" className="footer-demo-link" onClick={() => loadDemo(d.id)}>
-                {d.slug}
-                <b style={{ color: scoreColor(d.score) }}>{d.score}</b>
-              </button>
-            ))}
-          </span>
-        )}
-        <span className="footer-meta">
-          Node.js + React · 静态扫描 · 零外部 CDN 依赖
-          {cache && cache.totalBytes > 0 && (
-            <span className="cache-info">
-              {' · '}本地缓存 {formatBytes(cache.totalBytes)}（源码快照 {cache.sources} 份 / 报告 {cache.reports} 份）
-              <button type="button" className="link-btn" onClick={doCleanCache} disabled={cleaning}>
-                {cleaning ? '清理中…' : '清理代码快照'}
-              </button>
-            </span>
-          )}
-        </span>
       </footer>
 
       {historyOpen && (
@@ -340,13 +289,6 @@ export default function App() {
       )}
     </div>
   )
-}
-
-function formatBytes(n: number) {
-  if (!Number.isFinite(n) || n <= 0) return '0 B'
-  if (n < 1024) return `${n} B`
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
-  return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
 function LoadingPanel({ url, stage, elapsed }: { url: string; stage: number; elapsed: number }) {
