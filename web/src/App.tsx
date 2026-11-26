@@ -9,6 +9,7 @@ import {
   health,
   listDemos,
 } from './api'
+import { AiSettings } from './components/AiSettings'
 import { HistoryPanel } from './components/HistoryPanel'
 import { ReportView } from './components/Report'
 import { Icon, scoreColor } from './components/ui'
@@ -38,6 +39,7 @@ export default function App() {
   const [error, setError] = useState<{ message: string; hint?: string } | null>(null)
   const [aiInfo, setAiInfo] = useState<{ aiProvider: string | null; version: string } | null>(null)
   const [demos, setDemos] = useState<DemoSummary[]>([])
+  const [aiSettingsOpen, setAiSettingsOpen] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
   const [historyOpen, setHistoryOpen] = useState(false)
   const [historyLoading, setHistoryLoading] = useState(false)
@@ -52,15 +54,19 @@ export default function App() {
       .finally(() => setHistoryLoading(false))
   }, [])
 
-  useEffect(() => {
+  const refreshHealth = useCallback(() => {
     health()
       .then(setAiInfo)
       .catch(() => setAiInfo(null))
+  }, [])
+
+  useEffect(() => {
+    refreshHealth()
     listDemos()
       .then(setDemos)
       .catch(() => setDemos([]))
     refreshHistory()
-  }, [refreshHistory])
+  }, [refreshHealth, refreshHistory])
 
   const openHistory = useCallback(() => {
     setHistoryOpen(true)
@@ -170,10 +176,16 @@ export default function App() {
             </div>
           </div>
           <div className="topbar-right">
-            <span className={`ai-state ${aiInfo?.aiProvider ? 'on' : ''}`}>
+            <button
+              type="button"
+              className={`ai-state ${aiInfo?.aiProvider ? 'on' : ''}`}
+              onClick={() => setAiSettingsOpen(true)}
+              title="配置 AI 通道"
+            >
               <Icon name="spark" size={14} />
               {aiInfo?.aiProvider ? `AI 通道 · ${aiInfo.aiProvider}` : 'AI：内置规则引擎'}
-            </span>
+              <Icon name="gear" size={13} />
+            </button>
             <button type="button" className="history-btn" onClick={openHistory}>
               <Icon name="doc" size={15} />
               历史记录
@@ -280,7 +292,12 @@ export default function App() {
         )}
 
         {!loading && report && (
-          <ReportView report={report} refreshing={refreshing} onRefresh={() => run(lastUrl.current, true)} />
+          <ReportView
+            report={report}
+            refreshing={refreshing}
+            onRefresh={() => run(lastUrl.current, true)}
+            onOpenAiSettings={() => setAiSettingsOpen(true)}
+          />
         )}
 
         {!loading && !report && !error && <HowItWorks />}
@@ -291,6 +308,13 @@ export default function App() {
           RepoPulse · 静态扫描，不上传代码 · 评分模型与规则说明见 <code className="mono">README.md</code>
         </span>
       </footer>
+
+      {aiSettingsOpen && (
+        <AiSettings
+          onClose={() => setAiSettingsOpen(false)}
+          onSaved={refreshHealth}
+        />
+      )}
 
       {historyOpen && (
         <HistoryPanel

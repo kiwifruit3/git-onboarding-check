@@ -113,3 +113,72 @@ export async function clearHistory(): Promise<{ freedBytes: number }> {
   if (!res.ok) throw new Error('清空失败')
   return res.json()
 }
+
+/* ---------------- AI 通道配置 ---------------- */
+
+export interface AiConfigStatus {
+  configured: boolean
+  source: 'ui' | 'env' | 'none'
+  provider: string | null
+  model: string | null
+  baseUrl: string | null
+  keyMasked: string | null
+  savedAt?: string | null
+  ok?: boolean
+  error?: string
+}
+
+export interface AiConfigInput {
+  provider: string
+  baseUrl: string
+  model: string
+  apiKey?: string
+}
+
+export interface AiTestResult {
+  ok: boolean
+  status?: number
+  latencyMs: number
+  model?: string
+  reply?: string
+  error?: string
+}
+
+async function jsonOrThrow(res: Response): Promise<any> {
+  const data = await res.json().catch(() => null)
+  if (!res.ok) throw new Error(data?.error || `请求失败（HTTP ${res.status}）`)
+  return data
+}
+
+export async function getAiConfig(): Promise<AiConfigStatus> {
+  try {
+    const res = await fetch('/api/ai/config')
+    if (!res.ok) return { configured: false, source: 'none', provider: null, model: null, baseUrl: null, keyMasked: null }
+    return await res.json()
+  } catch {
+    return { configured: false, source: 'none', provider: null, model: null, baseUrl: null, keyMasked: null }
+  }
+}
+
+export async function saveAiConfig(input: AiConfigInput): Promise<AiConfigStatus> {
+  const res = await fetch('/api/ai/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return jsonOrThrow(res)
+}
+
+export async function clearAiConfig(): Promise<AiConfigStatus> {
+  const res = await fetch('/api/ai/config', { method: 'DELETE' })
+  return jsonOrThrow(res)
+}
+
+export async function testAiConnection(input: AiConfigInput): Promise<AiTestResult> {
+  const res = await fetch('/api/ai/test', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  })
+  return jsonOrThrow(res)
+}

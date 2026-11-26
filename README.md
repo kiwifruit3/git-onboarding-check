@@ -118,7 +118,19 @@ npm run build       # 前端构建
 - **配置后要注意**：之前已经分析过的仓库会命中本地缓存（缓存里是旧的规则建议），需要点「重新体检」或删掉那条历史记录，才会重新调用大模型；首次调用约 10–20 秒。
 - 排查用：`GET /api/health` 会返回 `ai`（当前 provider / model / 网关域名）和 `envLoaded`（是否读到了 `.env`）。
 
-### 用 OpenCode Go 订阅跑 AI 建议
+### 方式一：在网页上配置（推荐，无需重启）
+
+点顶栏的 **「AI：内置规则引擎 ⚙」** 按钮（或 AI 页签里的「在网页上配置 AI 通道」），选服务商 → 填 Key → **测试连接** → **保存并启用**。
+
+![AI 设置](docs/screenshots/08-ai-settings.png)
+
+- 内置 DeepSeek / OpenCode Go / OpenCode Zen / OpenAI / 通义千问 / 自定义预设，切换后自动填好 Base URL 和模型名
+- 「测试连接」会真的发一次最小请求，直接显示延迟或具体错误（401 / 403 / 网络不通）
+- 配置保存在 `.cache/ai-config.json`（已被 git 忽略），接口只返回打码后的 Key
+- **网页配置优先级高于环境变量 / `.env`**，保存后立即生效，不用重启服务
+- 「删除本机配置」可随时回退到环境变量或内置规则引擎
+
+### 方式二：用环境变量 / .env 配置
 
 OpenCode Go（$10/月）是 OpenAI 兼容网关，可以直接当本工具的 LLM 通道：
 
@@ -160,6 +172,14 @@ curl http://127.0.0.1:8787/api/history                    # 列表
 curl http://127.0.0.1:8787/api/history/<id>               # 单条报告
 curl -X DELETE http://127.0.0.1:8787/api/history/<id>     # 删除单条（含源码快照）
 curl -X POST http://127.0.0.1:8787/api/history/clear      # 清空全部
+
+# AI 通道配置（等价于网页端「AI 设置」）
+curl http://127.0.0.1:8787/api/ai/config                  # 当前配置（Key 打码）
+curl -X POST http://127.0.0.1:8787/api/ai/config -H 'Content-Type: application/json' \
+  -d '{"provider":"deepseek","baseUrl":"https://api.deepseek.com/v1","model":"deepseek-chat","apiKey":"sk-xxx"}'
+curl -X POST http://127.0.0.1:8787/api/ai/test -H 'Content-Type: application/json' \
+  -d '{"provider":"deepseek","baseUrl":"https://api.deepseek.com/v1","model":"deepseek-chat","apiKey":"sk-xxx"}'
+curl -X DELETE http://127.0.0.1:8787/api/ai/config        # 删除本机配置
 
 # 缓存占用与清理
 curl http://127.0.0.1:8787/api/cache
@@ -372,8 +392,10 @@ git-onboarding-check/
 
 ## 配置项
 
-> **密钥怎么放**：复制 `.env.example` 为 `.env`，把 Key 写进 `.env`（已在 `.gitignore` 中，服务启动时会自动加载）；
+> **密钥怎么放**：优先用网页端「AI 设置」（见下，存 `.cache/ai-config.json`，已 git 忽略）；
+> 也可以复制 `.env.example` 为 `.env` 写 Key（启动时自动加载）。
 > **不要**把真实 Key 写进 `.env.example`、README 或任何会被提交的文件——GitHub 的密钥检测会直接拦下推送。
+> 优先级：网页配置 > 环境变量 / `.env`。
 
 | 环境变量 | 默认值 | 说明 |
 | --- | --- | --- |

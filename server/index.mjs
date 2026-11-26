@@ -11,6 +11,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { analyzeRepository } from './lib/analyze.mjs'
 import { aiProviderInfo, aiProviderName } from './lib/ai.mjs'
+import { loadAiConfig } from './lib/ai-config.mjs'
 import { loadDotEnv } from './lib/env.mjs'
 import { BadInput, RepoAccessError } from './lib/util.mjs'
 
@@ -18,6 +19,8 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 // 先把项目根目录的 .env 载入（Key 写在 .env 里，不要写进 .env.example）
 const envLoaded = loadDotEnv(path.join(ROOT, '.env'))
+// 再载入网页端「AI 设置」保存的配置（优先级高于环境变量）
+loadAiConfig()
 const DIST = path.join(ROOT, 'dist')
 const DEMO_DIR = path.join(ROOT, 'demo', 'reports')
 const PORT = Number(process.env.PORT || 8787)
@@ -187,6 +190,39 @@ const server = http.createServer(async (req, res) => {
         node: process.version,
         uptime: Math.round(process.uptime()),
       })
+      return
+    }
+
+    if (pathname === '/api/ai/config' && req.method === 'GET') {
+      const { publicAiConfig } = await import('./lib/ai-config.mjs')
+      json(res, 200, { ...publicAiConfig(), health: aiProviderInfo() })
+      return
+    }
+
+    if (pathname === '/api/ai/config' && req.method === 'POST') {
+      const body = await readBody(req)
+      const { saveAiConfig, publicAiConfig } = await import('./lib/ai-config.mjs')
+      try {
+        saveAiConfig(body || {})
+        json(res, 200, { ok: true, ...publicAiConfig(), health: aiProviderInfo() })
+      } catch (error) {
+        json(res, 400, { ok: false, error: String(error?.message || error) })
+      }
+      return
+    }
+
+    if (pathname === '/api/ai/config' && req.method === 'DELETE') {
+      const { clearAiConfig, publicAiConfig } = await import('./lib/ai-config.mjs')
+      clearAiConfig()
+      json(res, 200, { ok: true, ...publicAiConfig(), health: aiProviderInfo() })
+      return
+    }
+
+    if (pathname === '/api/ai/test' && req.method === 'POST') {
+      const body = await readBody(req)
+      const { testAiConnection } = await import('./lib/ai.mjs')
+      const result = await testAiConnection(body || {})
+      json(res, 200, result)
       return
     }
 

@@ -36,10 +36,12 @@ export function ReportView({
   report,
   onRefresh,
   refreshing,
+  onOpenAiSettings,
 }: {
   report: Report
   onRefresh: () => void
   refreshing: boolean
+  onOpenAiSettings: () => void
 }) {
   const [tab, setTab] = useState('overview')
   const [updateInfo, setUpdateInfo] = useState<{ latestShort: string; hasUpdate: boolean } | null>(null)
@@ -178,7 +180,7 @@ export function ReportView({
       {tab === 'secrets' && <SecretsTab report={report} />}
       {tab === 'deps' && <DepsTab report={report} />}
       {tab === 'docs' && <DocsTab report={report} />}
-      {tab === 'ai' && <AiTab report={report} />}
+      {tab === 'ai' && <AiTab report={report} onOpenAiSettings={onOpenAiSettings} />}
       {tab === 'files' && <FilesTab report={report} />}
 
       <p className="disclaimer">
@@ -699,7 +701,7 @@ function sectionLabel(key: string) {
   return map[key] || key
 }
 
-function AiTab({ report }: { report: Report }) {
+function AiTab({ report, onOpenAiSettings }: { report: Report; onOpenAiSettings: () => void }) {
   const ai = report.ai
   if (!ai) return <section className="card"><Empty>暂无 AI 建议</Empty></section>
   return (
@@ -721,8 +723,15 @@ function AiTab({ report }: { report: Report }) {
           </div>
           <p>
             下面的结论、建议卡片与接入步骤，都是按模板从扫描结果拼装出来的（<code className="mono">heuristic-v1</code>）。
-            配置任意一个 LLM 通道后重启服务，即可切换为真实大模型生成：
+            配置任意一个 LLM 通道后，即可切换为真实大模型生成。
           </p>
+          <div className="ai-setup-cta">
+            <button type="button" className="btn-ghost primary" onClick={onOpenAiSettings}>
+              <Icon name="gear" size={15} /> 在网页上配置 AI 通道
+            </button>
+            <span className="muted small">填 Key → 测试连接 → 保存即生效，无需重启</span>
+          </div>
+          <p className="muted small">也可以用环境变量 / .env 配置（二选一，网页配置优先级更高）：</p>
           <pre className="ai-setup-code">{`# 方式一：DeepSeek（推荐，便宜）
 DEEPSEEK_API_KEY=sk-xxxx
 DEEPSEEK_MODEL=deepseek-chat

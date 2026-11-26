@@ -10,6 +10,7 @@
  *   Zen 按量  https://opencode.ai/inference/openai/v1
  * Go 套餐要求带 x-opencode-session 头，这里会自动补上。
  */
+import { loadAiConfig } from './ai-config.mjs'
 import { getProxyChoice } from './repo.mjs'
 import { runCommand, SEVERITY_LABEL } from './util.mjs'
 
@@ -18,7 +19,29 @@ const SEVERITY_RANK = { critical: 0, high: 1, medium: 2, low: 3, info: 4 }
 /** Go 网关要求稳定的会话 ID（用于路由与 prompt 缓存），进程内固定即可 */
 const OPENCODE_SESSION = `ses_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 10)}`
 
+function isOpencodeGateway(baseUrl) {
+  return /opencode\.ai/i.test(String(baseUrl || ''))
+}
+
 function detectProvider() {
+  // 1) 网页端「AI 设置」保存的配置优先
+  const cfg = loadAiConfig()
+  if (cfg?.apiKey && cfg?.baseUrl && cfg?.model) {
+    return {
+      name: cfg.provider || 'custom',
+      baseUrl: cfg.baseUrl,
+      apiKey: cfg.apiKey,
+      model: cfg.model,
+      source: 'ui',
+      opencodeSession: isOpencodeGateway(cfg.baseUrl),
+    }
+  }
+  // 2) 环境变量 / .env
+  const fromEnv = detectEnvProvider()
+  return fromEnv ? { ...fromEnv, source: 'env' } : null
+}
+
+function detectEnvProvider() {
   if (process.env.OPENCODE_API_KEY) {
     return {
       name: 'opencode',
@@ -62,14 +85,57 @@ export function aiProviderName() {
 /** 供 /api/health 排查用：当前 AI 通道的 provider / model（不含 Key） */
 export function aiProviderInfo() {
   const provider = detectProvider()
-  if (!provider) return { provider: null, model: null, baseUrl: null, configured: false }
+  if (!provider) return { provider: null, model: null, baseUrl: null, source: 'none', configured: false }
   let host = ''
   try {
     host = new URL(provider.baseUrl).host
   } catch {
     host = provider.baseUrl
   }
-  return { provider: provider.name, model: provider.model, baseUrl: host, configured: true }
+  return { provider: provider.name, model: provider.model, baseUrl: host, source: provider.source, configured: true }
+}
+
+/**
+ * 测试一个 AI 通道是否可用（网页端「测试连接」用）。
+ * 传参时用传入值，不传则用当前生效的配置。
+ * @returns {Promise<{ok:boolean, status?:number, latencyMs:number, model?:string, reply?:string, error?:string}>}
+ */
+export async function testAiConnection(override) {
+  const provider = override?.apiKey
+    ? {
+        name: override.provider || 'custom',
+        baseUrl: String(override.baseUrl || '').trim().replace(/\/+$/, ''),
+        apiKey: String(override.apiKey).trim(),
+        model: String(override.model || '').trim(),
+        opencodeSession: isOpencodeGateway(override.baseUrl),
+      }
+    : detectProvider()
+  if (!provider) return { ok: false, latencyMs: 0, error: '当前没有可用的 AI 配置' }
+  if (!/^https?:\/\//i.test(provider.baseUrl)) return { ok: false, latencyMs: 0, error: 'Base URL 必须以 http(s):// 开头' }
+  if (!provider.model) return { ok: false, latencyMs: 0, error: '模型名不能为空' }
+
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${provider.apiKey}`,
+    'User-Agent': 'repo-pulse/1.0 (+https://github.com/kiwifruit3/git-onboarding-check)',
+  }
+  if (provider.opencodeSession) headers['x-opencode-session'] = OPENCODE_SESSION
+
+  const body = JSON.stringify({
+    model: provider.model,
+    temperature: 0,
+    max_tokens: 16,
+    messages: [{ role: 'user', content: '只回复两个字：可用' }],
+  })
+  const started = Date.now()
+  try {
+    const text = await postJson(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, headers, body)
+    const data = JSON.parse(text)
+    const reply = String(data?.choices?.[0]?.message?.content || '').trim().slice(0, 80)
+    return { ok: true, latencyMs: Date.now() - started, model: provider.model, reply }
+  } catch (error) {
+    return { ok: false, latencyMs: Date.now() - started, error: String(error?.message || error).slice(0, 300) }
+  }
 }
 
 function installCommand(report) {

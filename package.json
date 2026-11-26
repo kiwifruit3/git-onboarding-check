@@ -1,4 +1,4 @@
-{
+﻿{
   "name": "git-onboarding-check",
   "private": true,
   "version": "1.0.0",
@@ -13,7 +13,7 @@
     "dev:web": "node node_modules/vite/bin/vite.js",
     "build": "node node_modules/vite/bin/vite.js build",
     "start": "node server/index.mjs --prod",
-    "test": "node tests/rules.mjs",
+    "test": "node tests/rules.mjs && node tests/ai-config.mjs",
     "smoke": "node scripts/smoke.mjs",
     "demo:build": "node scripts/build-demo.mjs",
     "clean": "node scripts/clean.mjs",
