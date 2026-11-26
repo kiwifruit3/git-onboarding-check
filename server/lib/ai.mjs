@@ -59,6 +59,19 @@ export function aiProviderName() {
   return detectProvider()?.name || null
 }
 
+/** 供 /api/health 排查用：当前 AI 通道的 provider / model（不含 Key） */
+export function aiProviderInfo() {
+  const provider = detectProvider()
+  if (!provider) return { provider: null, model: null, baseUrl: null, configured: false }
+  let host = ''
+  try {
+    host = new URL(provider.baseUrl).host
+  } catch {
+    host = provider.baseUrl
+  }
+  return { provider: provider.name, model: provider.model, baseUrl: host, configured: true }
+}
+
 function installCommand(report) {
   const ecos = report.sections?.deps?.ecosystems || []
   if (ecos.some((e) => e.id === 'node')) return 'npm install（或 pnpm / yarn install）'
@@ -154,7 +167,7 @@ function buildPrompt(report) {
     {
       role: 'system',
       content:
-        '你是资深研发效能与开源治理顾问。基于给定的仓库静态扫描结果，用简体中文输出接入建议。只输出 JSON，不要 markdown 代码块，结构为：{"verdict": string, "summary": string, "advice": [{"title": string, "detail": string, "severity": "critical|high|medium|low", "action": string}], "steps": string[]}。advice 最多 5 条，steps 3-6 条，必须具体到文件或命令，不要编造扫描结果中没有的问题。',
+        '你是资深研发效能与开源治理顾问。基于给定的仓库静态扫描结果，用简体中文输出接入建议。只输出 JSON，不要 markdown 代码块，结构为：{"verdict": string, "summary": string, "advice": [{"title": string, "detail": string, "severity": "critical|high|medium|low", "action": string}], "steps": string[]}。advice 最多 4 条，steps 3-5 条；每条 detail/action 不超过 50 字，verdict 不超过 80 字，summary 不超过 120 字。必须具体到文件或命令，不要编造扫描结果中没有的问题。',
     },
     { role: 'user', content: JSON.stringify(compact) },
   ]
@@ -205,6 +218,35 @@ async function postJsonViaCurl(url, headers, body, proxyUrl) {
   }
 }
 
+/** 从模型输出里尽量取出 JSON：去掉 ```json 围栏，必要时截取第一个 { 到最后一个 } */
+function extractJson(text) {
+  const raw = String(text || '').trim()
+  const candidates = [raw, raw.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim()]
+  const start = raw.indexOf('{')
+  const end = raw.lastIndexOf('}')
+  if (start >= 0 && end > start) candidates.push(raw.slice(start, end + 1))
+  for (const candidate of candidates) {
+    try {
+      const parsed = JSON.parse(candidate)
+      if (parsed && typeof parsed === 'object') return parsed
+    } catch {
+      /* 换下一个候选 */
+    }
+  }
+  return null
+}
+
+async function chatOnce(provider, headers, messages) {
+  const body = JSON.stringify({
+    model: provider.model,
+    temperature: 0.2,
+    max_tokens: 3000,
+    messages,
+  })
+  const data = JSON.parse(await postJson(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, headers, body))
+  return String(data?.choices?.[0]?.message?.content || '')
+}
+
 async function callLlm(provider, report) {
   const headers = {
     'Content-Type': 'application/json',
@@ -214,16 +256,26 @@ async function callLlm(provider, report) {
   }
   if (provider.opencodeSession) headers['x-opencode-session'] = OPENCODE_SESSION
 
-  const body = JSON.stringify({
-    model: provider.model,
-    temperature: 0.2,
-    max_tokens: 1200,
-    messages: buildPrompt(report),
-  })
-  const data = JSON.parse(await postJson(`${provider.baseUrl.replace(/\/$/, '')}/chat/completions`, headers, body))
-  const content = data?.choices?.[0]?.message?.content || ''
-  const cleaned = content.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim()
-  const parsed = JSON.parse(cleaned)
+  const messages = buildPrompt(report)
+  let content = await chatOnce(provider, headers, messages)
+  let parsed = extractJson(content)
+
+  // 第一次输出不是合法 JSON（常见原因：被 max_tokens 截断）时，补一轮更严格的要求
+  if (!parsed) {
+    const retryMessages = [
+      ...messages,
+      { role: 'assistant', content: content.slice(0, 1500) },
+      {
+        role: 'user',
+        content:
+          '上面的输出不是合法 JSON（可能被截断了）。请只输出一个合法 JSON 对象，不要 markdown 围栏、不要任何解释；advice 最多 4 条，每条 detail/action 各不超过 40 字；steps 最多 5 条，每条不超过 40 字。',
+      },
+    ]
+    content = await chatOnce(provider, headers, retryMessages)
+    parsed = extractJson(content)
+  }
+  if (!parsed) throw new Error(`大模型返回的不是合法 JSON：${content.slice(0, 120)}`)
+
   return {
     enabled: true,
     source: 'llm',

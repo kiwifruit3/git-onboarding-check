@@ -35,15 +35,10 @@ function parseEnv(text) {
 export function loadDotEnv(file = path.resolve(process.cwd(), '.env')) {
   if (!existsSync(file)) return false
   try {
-    if (typeof process.loadEnvFile === 'function') {
-      process.loadEnvFile(file)
-      return true
-    }
-  } catch {
-    /* 回退到手动解析 */
-  }
-  try {
-    const parsed = parseEnv(readFileSync(file, 'utf8'))
+    let text = readFileSync(file, 'utf8')
+    // Windows 上用 PowerShell Out-File 生成的 .env 可能带 UTF-8 BOM，先去掉
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1)
+    const parsed = parseEnv(text)
     for (const [key, value] of Object.entries(parsed)) {
       if (!(key in process.env)) process.env[key] = value
     }
