@@ -94,6 +94,20 @@ npm run build       # 前端构建
 3. 查看评分、维度条、风险清单；页签可下钻到 Windows 脚本、硬编码路径、密钥、依赖、文档、AI 建议、文件扫描。
 4. 支持「导出 Markdown / JSON」，报告头部会标注所基于的 commit。
 
+### 网络受限 / 没有梯子怎么办
+
+工具本身**不依赖任何 CDN 或外部资源**，页面永远能打开；只有「拉取目标仓库」这一步需要访问 GitHub。国内直连 GitHub 时常通时不通，可以按需选择：
+
+| 场景 | 做法 |
+| --- | --- |
+| 有系统代理（Clash / v2ray 等） | 什么都不用配，工具会自动探测并使用系统代理 |
+| 需要显式指定代理 | `REPOPULSE_PROXY=http://127.0.0.1:7890` |
+| 想走镜像加速 | `REPOPULSE_MIRROR=https://ghproxy.net/`（同时作用于源码包下载与 clone） |
+| 只是想看效果、完全断网 | 首页「离线示例（无需网络）」三个按钮，直接打开预生成的完整报告 |
+| 内网/演示环境 | `REPOPULSE_FORCE_OFFLINE=1`，只返回历史缓存报告并标注「可能不是最新」 |
+
+失败时不会白屏：页面会给出明确原因（DNS 失败 / 连接超时 / 仓库不存在）和可操作建议，并保留「重试」和「看示例报告」入口。
+
 ### HTTP API
 
 ```bash
@@ -253,11 +267,12 @@ scanCache[fileHash] = { secrets: [...], paths: [...], windows: ... }   // 与 co
 | 场景 | 兜底策略 |
 | --- | --- |
 | GitHub API 限流 | 架构上不依赖 REST API（`ls-remote` + archive 直下），天然规避；配置 `GITHUB_TOKEN` 时才会走 API 兜底 |
+| 网络抖动 / 直连不稳 | `ls-remote` 3 次退避重试（0 / 1.2s / 3.5s），源码包每种通道再重试 1 次；仍失败则返回明确错误而不是卡死 |
+| 国内直连不通 | 可选 `REPOPULSE_MIRROR=https://ghproxy.net/` 走镜像加速；或 `REPOPULSE_PROXY` 指定代理；工具本身也会自动探测系统代理 |
 | 源码包下载失败 | 回退 `git clone --depth 1 --single-branch`；再失败才报错 |
-| 本机代理失效 | 按「环境变量 → git config → Windows 系统代理（WinINET）→ 直连」探测可用代理，TCP 探测失败直接跳过；git 失败后换模式重试一次；可用 `REPOPULSE_PROXY` 显式指定 |
+| 本机代理失效 | 按「环境变量 → git config → Windows 系统代理（WinINET）→ 直连」探测可用代理，TCP 探测失败直接跳过；git 失败后换模式重试一次 |
 | 大仓库 | 源码包上限 200MB、文件数上限 12000、单文件文本 512KB、文本总量 48MB，超限降级并在报告中标注 `truncated` |
-| 网络失败 | 返回 422 + 可操作提示（区分「仓库不存在 / 非公开」与「网络不通」），页面提供重试按钮 |
-| 分析失败但已有旧报告 | 缓存按 commit 存放，旧 commit 的报告仍可查看；新 commit 失败时页面保留上一次结果并提示「更新检查失败」 |
+| 网络完全不通 | ① 若该仓库分析过 → 自动返回**历史缓存报告**并打上「可能不是最新」横幅；② 首页提供**离线示例报告**（`demo/reports/*.json`，预生成快照），零网络也能体验全部功能；③ `REPOPULSE_FORCE_OFFLINE=1` 可显式进入离线模式 |
 | 并发 | 服务端并发上限 2，超出的请求排队；单请求超时 300s |
 
 ## 架构与目录
@@ -279,8 +294,10 @@ git-onboarding-check/
 │   └── src/{App.tsx, components/, styles.css, export.ts}
 ├── scripts/
 │   ├── dev.mjs                # 同时拉起 API 与 Vite
+│   ├── build-demo.mjs         # 生成离线示例报告（demo/reports/*.json）
 │   └── smoke.mjs              # 命令行体检（也可做回归）
 ├── tests/rules.mjs            # 规则单测（离线，构造问题仓库断言命中）
+├── demo/reports/              # 离线示例报告（断网也能看完整界面）
 ├── .github/workflows/ci.yml   # CI：npm test + 类型检查 + 构建
 ├── docs/screenshots/          # 界面截图
 ├── dist/                      # 构建产物（npm run build）
@@ -304,6 +321,8 @@ git-onboarding-check/
 | `CHECK_CACHE_DIR` | `./.cache` | 缓存目录 |
 | `REPOPULSE_PROXY` | – | 指定 git / 下载使用的代理，如 `http://127.0.0.1:7890` |
 | `REPOPULSE_NO_PROXY` | – | 设为 `1` 强制直连 |
+| `REPOPULSE_MIRROR` | – | 镜像/加速前缀，用于源码包下载与 clone。支持 `https://ghproxy.net/`（前缀拼接）或 `https://ghproxy.net/{url}`（模板） |
+| `REPOPULSE_FORCE_OFFLINE` | – | 设为 `1` 强制离线：不访问网络，只返回历史缓存报告（用于断网演示 / 内网环境） |
 | `GITHUB_TOKEN` | – | 仅在 `ls-remote` 失败时用于 API 兜底 |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | – | OpenAI 兼容通道，用于 AI 建议 |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | – | DeepSeek 通道 |

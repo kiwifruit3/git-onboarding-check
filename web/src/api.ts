@@ -1,4 +1,4 @@
-import type { Report } from './types'
+import type { DemoSummary, Report } from './types'
 
 export interface ApiError extends Error {
   hint?: string
@@ -40,5 +40,23 @@ export async function checkUpdate(
     body: JSON.stringify({ url, commit }),
   })
   if (!res.ok) throw new Error('检查更新失败')
+  return res.json()
+}
+
+/** 离线示例报告（本地预生成，不依赖网络） */
+export async function listDemos(): Promise<DemoSummary[]> {
+  try {
+    const res = await fetch('/api/demo')
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data?.demos) ? data.demos : []
+  } catch {
+    return []
+  }
+}
+
+export async function getDemo(id: string): Promise<Report> {
+  const res = await fetch(`/api/demo/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error('示例报告加载失败')
   return res.json()
 }

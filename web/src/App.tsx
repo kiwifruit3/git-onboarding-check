@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { analyze, health } from './api'
+import { analyze, getDemo, health, listDemos } from './api'
 import { ReportView } from './components/Report'
-import { Icon } from './components/ui'
-import type { Report } from './types'
+import { Icon, scoreColor } from './components/ui'
+import type { DemoSummary, Report } from './types'
 
 const EXAMPLES = [
   { label: 'expressjs/express', url: 'https://github.com/expressjs/express' },
@@ -27,6 +27,7 @@ export default function App() {
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<{ message: string; hint?: string } | null>(null)
   const [aiInfo, setAiInfo] = useState<{ aiProvider: string | null; version: string } | null>(null)
+  const [demos, setDemos] = useState<DemoSummary[]>([])
   const [elapsed, setElapsed] = useState(0)
   const lastUrl = useRef('')
 
@@ -34,6 +35,9 @@ export default function App() {
     health()
       .then(setAiInfo)
       .catch(() => setAiInfo(null))
+    listDemos()
+      .then(setDemos)
+      .catch(() => setDemos([]))
   }, [])
 
   useEffect(() => {
@@ -68,6 +72,17 @@ export default function App() {
     e.preventDefault()
     run(input)
   }
+
+  const loadDemo = useCallback(async (id: string) => {
+    try {
+      const data = await getDemo(id)
+      setError(null)
+      setReport(data)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (err: any) {
+      setError({ message: err?.message || '示例报告加载失败' })
+    }
+  }, [])
 
   const stageIndex = useMemo(() => {
     const idx = Math.min(STAGES.length - 1, Math.floor(elapsed / 1400))
@@ -141,6 +156,22 @@ export default function App() {
               ))}
             </div>
 
+            {demos.length > 0 && (
+              <div className="demo-strip">
+                <span className="demo-strip-label">
+                  <Icon name="doc" size={13} /> 离线示例（无需网络）
+                </span>
+                {demos.map((d) => (
+                  <button key={d.id} type="button" className="demo-chip" onClick={() => loadDemo(d.id)} disabled={loading}>
+                    <span className="demo-chip-name">{d.slug}</span>
+                    <span className="demo-chip-score" style={{ color: scoreColor(d.score) }}>
+                      {d.score}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+
             <ul className="features">
               <li>
                 <Icon name="doc" size={15} /> README / 依赖 / 启动脚本
@@ -175,11 +206,31 @@ export default function App() {
               </button>
               <span className="muted small">仅支持公开仓库；私有仓库需要授权后才能访问。</span>
             </div>
+            {demos.length > 0 && (
+              <div className="error-demos">
+                <span className="muted small">网络不通？可以先看离线示例报告（本地数据，不联网）：</span>
+                <div className="error-demo-list">
+                  {demos.map((d) => (
+                    <button key={d.id} type="button" className="demo-chip" onClick={() => loadDemo(d.id)}>
+                      <span className="demo-chip-name">{d.slug}</span>
+                      <span className="demo-chip-score" style={{ color: scoreColor(d.score) }}>
+                        {d.score}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </section>
         )}
 
         {!loading && report && (
-          <ReportView report={report} refreshing={refreshing} onRefresh={() => run(lastUrl.current, true)} />
+          <ReportView
+            report={report}
+            refreshing={refreshing}
+            onRefresh={() => run(lastUrl.current, true)}
+            onAnalyze={(url) => run(url)}
+          />
         )}
 
         {!loading && !report && !error && <HowItWorks />}

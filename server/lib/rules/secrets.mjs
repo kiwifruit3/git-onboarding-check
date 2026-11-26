@@ -131,6 +131,17 @@ function isPlaceholder(value, line) {
   return PLACEHOLDER.test(value) || PLACEHOLDER.test(line.slice(0, 160))
 }
 
+/**
+ * 上下文只用于展示，必须二次脱敏：
+ * 除了命中值本身，同一行里其他长 token 也一律打码——避免「体检报告」自己成为泄露源
+ * （GitHub Push Protection 就曾拦下过未脱敏的 demo 报告）。
+ */
+function safeContext(line, secret) {
+  let text = line.trim().slice(0, 240)
+  if (secret) text = text.split(secret).join(maskSecret(secret))
+  return text.replace(/[A-Za-z0-9_\-+=]{24,}/g, (m) => maskSecret(m))
+}
+
 export function analyzeSecrets(ctx) {
   const hits = []
   const findings = []
@@ -181,7 +192,7 @@ export function analyzeSecrets(ctx) {
           severity,
           confidence,
           masked: maskSecret(rawValue),
-          context: line.trim().slice(0, 200),
+          context: safeContext(line, rawValue),
           suggestion: pattern.suggestion || '移除硬编码密钥，改用环境变量 / 密钥管理服务，并轮换已泄露的凭据。',
         })
         break
@@ -253,7 +264,7 @@ export function analyzeSecrets(ctx) {
         severity: 'medium',
         confidence: 'low',
         masked: maskSecret(value),
-        context: line.trim().slice(0, 200),
+        context: safeContext(line, value),
         suggestion: '确认是否为真实密钥；若是，改为环境变量注入。',
       })
     }

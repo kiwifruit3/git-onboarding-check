@@ -16,10 +16,37 @@ import { BadInput, RepoAccessError } from './lib/util.mjs'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const ROOT = path.resolve(__dirname, '..')
 const DIST = path.join(ROOT, 'dist')
+const DEMO_DIR = path.join(ROOT, 'demo', 'reports')
 const PORT = Number(process.env.PORT || 8787)
 const HOST = process.env.HOST || '127.0.0.1'
 const MAX_CONCURRENT = 2
 const VERSION = '1.0.0'
+
+/** 离线示例报告：预生成快照，断网也能看完整界面 */
+let demoCache = null
+async function loadDemoReports() {
+  if (demoCache) return demoCache
+  const { readdir, readFile } = await import('node:fs/promises')
+  let names = []
+  try {
+    names = (await readdir(DEMO_DIR)).filter((n) => n.endsWith('.json'))
+  } catch {
+    names = []
+  }
+  const reports = {}
+  for (const name of names) {
+    try {
+      const raw = await readFile(path.join(DEMO_DIR, name), 'utf8')
+      const report = JSON.parse(raw)
+      report.meta = { ...report.meta, demo: true }
+      reports[name.replace(/\.json$/, '')] = report
+    } catch {
+      /* 跳过损坏的示例文件 */
+    }
+  }
+  demoCache = reports
+  return reports
+}
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -155,6 +182,35 @@ const server = http.createServer(async (req, res) => {
         node: process.version,
         uptime: Math.round(process.uptime()),
       })
+      return
+    }
+
+    if (pathname === '/api/demo' && req.method === 'GET') {
+      const reports = await loadDemoReports()
+      const demos = Object.entries(reports).map(([id, r]) => ({
+        id,
+        slug: r.meta.repo.slug,
+        score: r.score.total,
+        grade: r.score.grade,
+        gradeLabel: r.score.gradeLabel,
+        commitShort: r.meta.commitShort,
+        analyzedAt: r.meta.analyzedAt,
+        riskTotal: r.risk.total,
+        counts: r.risk.counts,
+      }))
+      json(res, 200, { demos })
+      return
+    }
+
+    if (pathname.startsWith('/api/demo/') && req.method === 'GET') {
+      const id = decodeURIComponent(pathname.slice('/api/demo/'.length))
+      const reports = await loadDemoReports()
+      const report = reports[id]
+      if (!report) {
+        json(res, 404, { error: '示例报告不存在' })
+        return
+      }
+      json(res, 200, report)
       return
     }
 

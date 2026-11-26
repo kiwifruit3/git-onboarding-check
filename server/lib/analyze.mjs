@@ -2,7 +2,7 @@
  * 分析编排：仓库 → 源码 → 文件集 → 六类规则 → 评分 → 风险清单 → AI 建议。
  */
 import { generateAiAdvice } from './ai.mjs'
-import { ensureSource, readCachedReport, resolveHead, writeCachedReport } from './repo.mjs'
+import { ensureSource, findLatestCachedReport, readCachedReport, resolveHead, writeCachedReport } from './repo.mjs'
 import { analyzeDeps } from './rules/deps.mjs'
 import { analyzeHygiene } from './rules/hygiene.mjs'
 import { analyzePaths } from './rules/paths.mjs'
@@ -58,10 +58,34 @@ function dedupeFindings(findings) {
   return out
 }
 
+/** 网络失败时，用历史缓存报告兜底，并明确标注「可能不是最新」 */
+function staleReport(cached, error, repo) {
+  const reason = [error?.message, error?.hint].filter(Boolean).join('：')
+  return {
+    ...cached,
+    meta: {
+      ...cached.meta,
+      cached: true,
+      stale: true,
+      staleReason: reason || '网络异常，已回退到最近一次缓存报告',
+      requestedAt: new Date().toISOString(),
+      requestRepo: repo.slug,
+    },
+  }
+}
+
 export async function analyzeRepository(input, { refresh = false, withAi = true } = {}) {
   const startedAt = Date.now()
   const repo = parseRepoUrl(input)
-  const head = await resolveHead(repo)
+
+  let head
+  try {
+    head = await resolveHead(repo)
+  } catch (error) {
+    const stale = await findLatestCachedReport(repo)
+    if (stale) return staleReport(stale, error, repo)
+    throw error
+  }
 
   if (!refresh) {
     const cached = await readCachedReport(repo, head.sha)
@@ -73,7 +97,16 @@ export async function analyzeRepository(input, { refresh = false, withAi = true 
     }
   }
 
-  const source = await ensureSource(repo, head.sha)
+  let source
+  try {
+    source = await ensureSource(repo, head.sha)
+  } catch (error) {
+    const sameCommit = await readCachedReport(repo, head.sha)
+    if (sameCommit && sameCommit.schemaVersion === SCHEMA_VERSION) return staleReport(sameCommit, error, repo)
+    const stale = await findLatestCachedReport(repo)
+    if (stale) return staleReport(stale, error, repo)
+    throw error
+  }
   const { files, stats } = await collectFiles(source.dir)
 
   const pkg = pickRootPackageJson(files)

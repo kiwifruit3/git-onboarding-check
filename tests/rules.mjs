@@ -156,6 +156,10 @@ try {
       secrets.hits.every((h) => !h.masked.includes('9fK2mQ7pLx4vN8sR3tY6wB1cD5gH0jZ')),
       '证据必须脱敏，不能包含完整密钥',
     )
+    assert.ok(
+      secrets.hits.every((h) => !h.context.includes('9fK2mQ7pLx4vN8sR3tY6wB1cD5gH0jZ')),
+      '上下文必须脱敏，导出报告不能泄露原始密钥',
+    )
   })
 
   console.log('工程规范规则')

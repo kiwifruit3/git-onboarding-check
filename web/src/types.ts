@@ -101,6 +101,18 @@ export interface AiAdvice {
   error?: string
 }
 
+export interface DemoSummary {
+  id: string
+  slug: string
+  score: number
+  grade: string
+  gradeLabel: string
+  commitShort: string
+  analyzedAt: string
+  riskTotal: number
+  counts: Record<Severity, number>
+}
+
 export interface Report {
   schemaVersion: number
   meta: {
@@ -113,6 +125,10 @@ export interface Report {
     durationMs: number
     source: { strategy: string; cached: boolean; via: string }
     cached: boolean
+    stale?: boolean
+    staleReason?: string
+    demo?: boolean
+    demoNote?: string
     scanner: { name: string; version: string; schemaVersion: number }
   }
   score: {

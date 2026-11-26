@@ -33,6 +33,41 @@ function looksLikeProxyFailure(text) {
   return /127\.0\.0\.1|proxy|ECONNREFUSED|Could not connect|Failed to connect/i.test(text || '')
 }
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+/**
+ * 镜像/加速地址（可选）。国内直连 GitHub 时常通时不通，可配置一个镜像前缀：
+ *   REPOPULSE_MIRROR=https://ghproxy.net/            → 前缀拼接
+ *   REPOPULSE_MIRROR=https://ghproxy.net/{url}       → 模板替换
+ * 对源码包下载和 git clone 都生效。
+ */
+function applyMirror(url) {
+  const mirror = (process.env.REPOPULSE_MIRROR || '').trim()
+  if (!mirror) return url
+  if (mirror.includes('{url}')) return mirror.replace('{url}', url)
+  return `${mirror.replace(/\/+$/, '')}/${url}`
+}
+
+/** 把 git/下载的报错翻译成可操作的提示 */
+function networkHint(stderr = '') {
+  const s = String(stderr)
+  if (/Could not resolve host|getaddrinfo|ENOTFOUND|Name or service not known/i.test(s)) {
+    return 'DNS 解析失败：本机无法解析 github.com，请检查 DNS 或代理设置。'
+  }
+  if (
+    /Operation timed out|timed out|timeout|Failed to connect|Could not connect|Connection reset|ECONNRESET|SSL|TLS/i.test(
+      s,
+    )
+  ) {
+    return (
+      '连接 GitHub 失败或被限速（国内直连 GitHub 时常通时不通）。' +
+      '可选：① 打开系统代理（工具会自动探测）；② 设置 REPOPULSE_PROXY=http://127.0.0.1:7890；' +
+      '③ 设置 REPOPULSE_MIRROR=https://ghproxy.net/ 走镜像加速。'
+    )
+  }
+  return ''
+}
+
 function tcpProbe(host, port, timeout = 400) {
   return new Promise((resolve) => {
     const socket = net.connect({ host, port })
@@ -123,18 +158,37 @@ async function gitWithProxyFallback(args, opts) {
 
 /**
  * 解析仓库当前 HEAD。
+ * 国内直连 GitHub 时常通时不通，这里做 3 次退避重试（0 / 1.2s / 3.5s）。
  * @returns {{sha: string, branch: string, via: string}}
  */
 export async function resolveHead(repo) {
-  const res = await gitWithProxyFallback(['ls-remote', '--symref', repo.cloneUrl, 'HEAD'], { timeout: 25_000 })
+  // 演示/断网场景：强制离线，只返回历史缓存（见 README「失败与限流兜底」）
+  if (process.env.REPOPULSE_FORCE_OFFLINE === '1') {
+    throw new RepoAccessError(
+      '已开启离线模式（REPOPULSE_FORCE_OFFLINE=1）',
+      '离线模式不会访问网络，只返回历史缓存报告；如需联网分析请取消该环境变量后重启。',
+    )
+  }
+  const delays = [0, 1_200, 3_500]
+  let res = null
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt])
+    res = await gitWithProxyFallback(['ls-remote', '--symref', repo.cloneUrl, 'HEAD'], { timeout: 25_000 })
+    if (res.code === 0) break
+    // 仓库不存在 / 无权限，重试没有意义
+    if (/not found|does not exist|Repository not found|Authentication failed/i.test(res.stderr)) break
+  }
+
   if (res.code !== 0) {
     const apiResult = await resolveHeadViaApi(repo)
     if (apiResult) return apiResult
     const proxy = await getProxyChoice()
-    const hint = /not found|does not exist|repository .* not found|Repository not found/i.test(res.stderr)
+    const notFound = /not found|does not exist|repository .* not found|Repository not found/i.test(res.stderr)
+    const hint = notFound
       ? '仓库不存在或不是公开仓库（本工具只支持公开仓库）。'
-      : `无法连接代码托管平台（当前代理策略：${proxy.source}${proxy.url ? ` ${proxy.url}` : ''}）。` +
-        '请检查网络，或用 REPOPULSE_PROXY=http://127.0.0.1:7890 指定可用代理。'
+      : networkHint(res.stderr) ||
+        `无法连接代码托管平台（当前代理策略：${proxy.source}${proxy.url ? ` ${proxy.url}` : ''}）。` +
+          '请检查网络，或用 REPOPULSE_PROXY=http://127.0.0.1:7890 指定可用代理。'
     throw new RepoAccessError('读取仓库 HEAD 失败', hint)
   }
 
@@ -308,29 +362,57 @@ async function safeExtract(archive, dest) {
 }
 
 async function fetchViaArchive(repo, sha, dest) {
-  const url = archiveUrl(repo, sha)
-  if (!url) throw new Error('该托管平台不支持源码包直下')
-  await mkdir(dest, { recursive: true })
-  const archive = path.join(CACHE_ROOT, 'tmp', `${Date.now()}-${Math.random().toString(16).slice(2)}.tar.gz`)
-  await mkdir(path.dirname(archive), { recursive: true })
-  try {
-    const bytes = await downloadArchive(url, archive)
-    await safeExtract(archive, dest)
-    return { strategy: 'archive', bytes, url }
-  } finally {
-    await rm(archive, { force: true }).catch(() => {})
+  const base = archiveUrl(repo, sha)
+  if (!base) throw new Error('该托管平台不支持源码包直下')
+
+  // 直连 → 镜像（如果配置了 REPOPULSE_MIRROR），每种再退避重试一次
+  const candidates = [base]
+  const mirrored = applyMirror(base)
+  if (mirrored !== base) candidates.push(mirrored)
+
+  let lastError = null
+  for (const url of candidates) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt) await sleep(1_200)
+      await rm(dest, { recursive: true, force: true }).catch(() => {})
+      await mkdir(dest, { recursive: true })
+      const archive = path.join(CACHE_ROOT, 'tmp', `${Date.now()}-${Math.random().toString(16).slice(2)}.tar.gz`)
+      await mkdir(path.dirname(archive), { recursive: true })
+      try {
+        const bytes = await downloadArchive(url, archive)
+        await safeExtract(archive, dest)
+        return { strategy: 'archive', bytes, url, mirrored: url !== base }
+      } catch (error) {
+        lastError = error
+      } finally {
+        await rm(archive, { force: true }).catch(() => {})
+      }
+    }
   }
+  throw lastError || new Error('源码包下载失败')
 }
 
 async function fetchViaClone(repo, dest) {
   await mkdir(path.dirname(dest), { recursive: true })
-  const res = await gitWithProxyFallback(
-    ['clone', '--depth', '1', '--single-branch', '--no-tags', repo.cloneUrl, dest],
-    { timeout: 180_000 },
-  )
-  if (res.code !== 0) throw new Error(`git clone 失败：${res.stderr.split('\n').slice(-3).join(' ').slice(0, 300)}`)
-  await rm(path.join(dest, '.git'), { recursive: true, force: true }).catch(() => {})
-  return { strategy: 'clone', bytes: 0 }
+  const candidates = [applyMirror(repo.cloneUrl), repo.cloneUrl].filter((v, i, arr) => arr.indexOf(v) === i)
+  let lastError = null
+  for (const cloneUrl of candidates) {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      if (attempt) await sleep(1_200)
+      await rm(dest, { recursive: true, force: true }).catch(() => {})
+      const res = await gitWithProxyFallback(
+        ['clone', '--depth', '1', '--single-branch', '--no-tags', cloneUrl, dest],
+        { timeout: 180_000 },
+      )
+      if (res.code === 0) {
+        await rm(path.join(dest, '.git'), { recursive: true, force: true }).catch(() => {})
+        return { strategy: 'clone', bytes: 0 }
+      }
+      lastError = new Error(`git clone 失败：${res.stderr.split('\n').slice(-3).join(' ').slice(0, 300)}`)
+      if (/not found|does not exist|Repository not found/i.test(res.stderr)) break
+    }
+  }
+  throw lastError || new Error('git clone 失败')
 }
 
 /**
@@ -353,7 +435,8 @@ export async function ensureSource(repo, sha) {
     } catch (cloneError) {
       throw new RepoAccessError(
         '获取仓库源码失败',
-        `源码包：${archiveError.message}；克隆：${cloneError.message}。请确认仓库为公开仓库且网络可达。`,
+        networkHint(`${archiveError.message} ${cloneError.message}`) ||
+          `源码包：${archiveError.message}；克隆：${cloneError.message}。请确认仓库为公开仓库且网络可达。`,
       )
     }
   }
@@ -382,6 +465,37 @@ export async function writeCachedReport(repo, sha, report) {
   await mkdir(path.dirname(file), { recursive: true })
   const { writeFile } = await import('node:fs/promises')
   await writeFile(file, JSON.stringify(report), 'utf8')
+}
+
+/**
+ * 找到该仓库最近一次缓存报告（任意 commit）。
+ * 用途：网络不通时降级返回历史报告，并标注「可能不是最新」。
+ */
+export async function findLatestCachedReport(repo) {
+  const dir = path.join(CACHE_ROOT, 'reports')
+  const prefix = `${repo.provider}-${repo.owner.replace(/\//g, '~')}-${repo.repo}-`.replace(/[^\w.~-]/g, '_')
+  let entries
+  try {
+    entries = await readdir(dir)
+  } catch {
+    return null
+  }
+  let newest = null
+  for (const name of entries) {
+    if (!name.startsWith(prefix) || !name.endsWith('.json')) continue
+    const full = path.join(dir, name)
+    try {
+      const info = await stat(full)
+      if (!newest || info.mtimeMs > newest.mtime) newest = { full, mtime: info.mtimeMs }
+    } catch {}
+  }
+  if (!newest) return null
+  try {
+    const { readFile } = await import('node:fs/promises')
+    return JSON.parse(await readFile(newest.full, 'utf8'))
+  } catch {
+    return null
+  }
 }
 
 export { SOURCE_TTL_DAYS }

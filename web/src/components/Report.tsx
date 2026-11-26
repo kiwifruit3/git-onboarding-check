@@ -35,10 +35,12 @@ const TABS = [
 export function ReportView({
   report,
   onRefresh,
+  onAnalyze,
   refreshing,
 }: {
   report: Report
   onRefresh: () => void
+  onAnalyze: (url: string) => void
   refreshing: boolean
 }) {
   const [tab, setTab] = useState('overview')
@@ -102,9 +104,19 @@ export function ReportView({
               {updateInfo.hasUpdate ? `远端有新提交 ${updateInfo.latestShort}` : '已是最新提交'}
             </span>
           )}
-          <button type="button" className="btn-ghost" onClick={doCheckUpdate} disabled={checking}>
+          <button type="button" className="btn-ghost" onClick={doCheckUpdate} disabled={checking || meta.demo}>
             {checking ? '检查中…' : '检查更新'}
           </button>
+          {meta.demo ? (
+            <button type="button" className="btn-ghost primary" onClick={() => onAnalyze(meta.repo.webUrl)}>
+              <Icon name="play" size={15} /> 在线分析此仓库
+            </button>
+          ) : (
+            <button type="button" className="btn-ghost primary" onClick={onRefresh} disabled={refreshing}>
+              <Icon name="refresh" size={16} />
+              {refreshing ? '重新体检中…' : '重新体检'}
+            </button>
+          )}
           <button
             type="button"
             className="btn-ghost"
@@ -121,12 +133,28 @@ export function ReportView({
           >
             JSON
           </button>
-          <button type="button" className="btn-ghost primary" onClick={onRefresh} disabled={refreshing}>
-            <Icon name="refresh" size={16} />
-            {refreshing ? '重新体检中…' : '重新体检'}
-          </button>
         </div>
       </div>
+
+      {meta.stale && (
+        <div className="banner banner-warn">
+          <Icon name="warning" size={16} />
+          <div>
+            <b>无法获取最新数据，当前展示的是历史缓存报告</b>
+            <span>{meta.staleReason || '已回退到最近一次分析结果，commit 可能不是最新。'}</span>
+          </div>
+        </div>
+      )}
+
+      {meta.demo && (
+        <div className="banner banner-demo">
+          <Icon name="doc" size={16} />
+          <div>
+            <b>离线示例报告</b>
+            <span>{meta.demoNote || '预生成快照，不会实时更新；可直接体验全部功能。'}</span>
+          </div>
+        </div>
+      )}
 
       <nav className="tabs">
         {TABS.map((t) => (
