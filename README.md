@@ -131,6 +131,16 @@ curl -X POST http://127.0.0.1:8787/api/check-update \
 
 # 健康检查
 curl http://127.0.0.1:8787/api/health
+
+# 历史记录（本地缓存的报告）
+curl http://127.0.0.1:8787/api/history                    # 列表
+curl http://127.0.0.1:8787/api/history/<id>               # 单条报告
+curl -X DELETE http://127.0.0.1:8787/api/history/<id>     # 删除单条（含源码快照）
+curl -X POST http://127.0.0.1:8787/api/history/clear      # 清空全部
+
+# 缓存占用与清理
+curl http://127.0.0.1:8787/api/cache
+curl -X POST http://127.0.0.1:8787/api/cache/clean -d '{"includeReports":false}' -H 'Content-Type: application/json'
 ```
 
 ## 评分模型
@@ -382,7 +392,15 @@ npm run clean
 npm run clean -- --all
 ```
 
-页脚也会显示「本地缓存 xx MB（源码快照 N 份 / 报告 N 份）」，点「清理代码快照」即可一键清空源码快照。
+**页头「历史记录」**可以查看本地保存的每一份报告（仓库、commit、分数、时间、占用），支持：
+
+- **查看**：直接打开历史报告，页面会提示「本地历史记录」，可继续点「检查更新 / 重新体检」；
+- **删除**：删掉单条记录，同时删除它对应的源码快照；
+- **清空全部**：一次清空所有报告与快照。
+
+![历史记录](docs/screenshots/07-history.png)
+
+页脚也会显示「本地缓存 xx MB（源码快照 N 份 / 报告 N 份）」，点「清理代码快照」可只清源码不动报告。
 
 > **关于 AI 建议**：未配置大模型时完全离线；配置了 `OPENAI_API_KEY` 等之后，发送给模型的是**扫描结果摘要**
 > （仓库名、评分、风险标题、文件路径、整改建议），**不会发送源码内容**。

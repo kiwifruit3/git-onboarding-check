@@ -1,8 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { analyze, cleanCache, getCacheStats, getDemo, health, listDemos } from './api'
+import {
+  analyze,
+  cleanCache,
+  clearHistory,
+  deleteHistory,
+  getCacheStats,
+  getDemo,
+  getHistory,
+  getHistoryReport,
+  health,
+  listDemos,
+} from './api'
+import { HistoryPanel } from './components/HistoryPanel'
 import { ReportView } from './components/Report'
 import { Icon, scoreColor } from './components/ui'
-import type { CacheStats, DemoSummary, Report } from './types'
+import type { CacheStats, DemoSummary, HistoryItem, Report } from './types'
 
 const EXAMPLES = [
   { label: 'expressjs/express', url: 'https://github.com/expressjs/express' },
@@ -30,8 +42,19 @@ export default function App() {
   const [demos, setDemos] = useState<DemoSummary[]>([])
   const [cache, setCache] = useState<CacheStats | null>(null)
   const [cleaning, setCleaning] = useState(false)
+  const [history, setHistory] = useState<HistoryItem[]>([])
+  const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const lastUrl = useRef('')
+
+  const refreshHistory = useCallback(() => {
+    setHistoryLoading(true)
+    getHistory()
+      .then(setHistory)
+      .catch(() => setHistory([]))
+      .finally(() => setHistoryLoading(false))
+  }, [])
 
   useEffect(() => {
     health()
@@ -43,7 +66,8 @@ export default function App() {
     getCacheStats()
       .then(setCache)
       .catch(() => setCache(null))
-  }, [])
+    refreshHistory()
+  }, [refreshHistory])
 
   const refreshCache = useCallback(() => {
     getCacheStats()
@@ -63,6 +87,49 @@ export default function App() {
       setCleaning(false)
     }
   }, [])
+
+  const openHistory = useCallback(() => {
+    setHistoryOpen(true)
+    refreshHistory()
+  }, [refreshHistory])
+
+  const openHistoryReport = useCallback(async (item: HistoryItem) => {
+    try {
+      const data = await getHistoryReport(item.id)
+      setError(null)
+      setReport({ ...data, meta: { ...data.meta, history: true } })
+      setInput(data.meta.repo.webUrl || `${data.meta.repo.owner}/${data.meta.repo.name}`)
+      setHistoryOpen(false)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    } catch (err: any) {
+      setError({ message: err?.message || '记录加载失败' })
+    }
+  }, [])
+
+  const removeHistory = useCallback(
+    async (item: HistoryItem) => {
+      if (!window.confirm(`删除「${item.slug}@${item.commitShort}」的历史记录？对应的源码快照也会一起删除。`)) return
+      try {
+        await deleteHistory(item.id)
+        refreshHistory()
+        refreshCache()
+      } catch {
+        /* 忽略 */
+      }
+    },
+    [refreshHistory, refreshCache],
+  )
+
+  const clearAllHistory = useCallback(async () => {
+    if (!window.confirm('清空全部历史记录与源码快照？此操作不可恢复。')) return
+    try {
+      await clearHistory()
+      refreshHistory()
+      refreshCache()
+    } catch {
+      /* 忽略 */
+    }
+  }, [refreshHistory, refreshCache])
 
   useEffect(() => {
     if (!loading) return
@@ -90,8 +157,9 @@ export default function App() {
       setLoading(false)
       setRefreshing(false)
       refreshCache()
+      refreshHistory()
     }
-  }, [])
+  }, [refreshCache, refreshHistory])
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -132,6 +200,11 @@ export default function App() {
               <Icon name="spark" size={14} />
               {aiInfo?.aiProvider ? `AI 通道 · ${aiInfo.aiProvider}` : 'AI：内置规则引擎'}
             </span>
+            <button type="button" className="history-btn" onClick={openHistory}>
+              <Icon name="doc" size={15} />
+              历史记录
+              {history.length > 0 && <span className="history-count">{history.length}</span>}
+            </button>
             <a className="gh-link" href="https://github.com/kiwifruit3/git-onboarding-check" target="_blank" rel="noreferrer">
               <Icon name="github" size={16} /> 源码
             </a>
@@ -277,6 +350,17 @@ export default function App() {
           )}
         </span>
       </footer>
+
+      {historyOpen && (
+        <HistoryPanel
+          items={history}
+          loading={historyLoading}
+          onClose={() => setHistoryOpen(false)}
+          onOpen={openHistoryReport}
+          onDelete={removeHistory}
+          onClear={clearAllHistory}
+        />
+      )}
     </div>
   )
 }

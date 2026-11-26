@@ -164,7 +164,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+      'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Max-Age': '86400',
     })
@@ -197,6 +197,47 @@ const server = http.createServer(async (req, res) => {
       const result = await clearCache({ includeReports: !!body?.includeReports })
       console.log(`[cache] 已清理，释放 ${(result.freedBytes / 1024 / 1024).toFixed(1)}MB`)
       json(res, 200, result)
+      return
+    }
+
+    if (pathname === '/api/history' && req.method === 'GET') {
+      const { listCachedReports } = await import('./lib/repo.mjs')
+      json(res, 200, { items: await listCachedReports() })
+      return
+    }
+
+    if (pathname === '/api/history/clear' && req.method === 'POST') {
+      const { clearCache } = await import('./lib/repo.mjs')
+      const result = await clearCache({ includeReports: true })
+      console.log(`[history] 已清空全部历史记录，释放 ${(result.freedBytes / 1024 / 1024).toFixed(1)}MB`)
+      json(res, 200, result)
+      return
+    }
+
+    if (pathname.startsWith('/api/history/') && req.method === 'GET') {
+      const id = decodeURIComponent(pathname.slice('/api/history/'.length))
+      const { readCachedReportById } = await import('./lib/repo.mjs')
+      const report = await readCachedReportById(id)
+      if (!report) {
+        json(res, 404, { error: '记录不存在或已被删除' })
+        return
+      }
+      json(res, 200, report)
+      return
+    }
+
+    if (pathname.startsWith('/api/history/') && req.method === 'DELETE') {
+      const id = decodeURIComponent(pathname.slice('/api/history/'.length))
+      const { deleteCachedReport } = await import('./lib/repo.mjs')
+      try {
+        const result = await deleteCachedReport(id)
+        console.log(
+          `[history] 已删除 ${result.slug}@${result.commitShort}，释放 ${(result.freedBytes / 1024).toFixed(0)}KB`,
+        )
+        json(res, 200, result)
+      } catch {
+        json(res, 404, { error: '记录不存在或已被删除' })
+      }
       return
     }
 

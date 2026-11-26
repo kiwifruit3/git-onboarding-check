@@ -1,4 +1,4 @@
-import type { CacheStats, DemoSummary, Report } from './types'
+import type { CacheStats, DemoSummary, HistoryItem, Report } from './types'
 
 export interface ApiError extends Error {
   hint?: string
@@ -81,4 +81,35 @@ export async function cleanCache(includeReports = false): Promise<CacheStats | n
   if (!res.ok) throw new Error('清理失败')
   const data = await res.json()
   return data?.after ?? null
+}
+
+/* ---------------- 历史记录 ---------------- */
+
+export async function getHistory(): Promise<HistoryItem[]> {
+  try {
+    const res = await fetch('/api/history')
+    if (!res.ok) return []
+    const data = await res.json()
+    return Array.isArray(data?.items) ? data.items : []
+  } catch {
+    return []
+  }
+}
+
+export async function getHistoryReport(id: string): Promise<Report> {
+  const res = await fetch(`/api/history/${encodeURIComponent(id)}`)
+  if (!res.ok) throw new Error('记录不存在或已被删除')
+  return res.json()
+}
+
+export async function deleteHistory(id: string): Promise<{ freedBytes: number }> {
+  const res = await fetch(`/api/history/${encodeURIComponent(id)}`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('删除失败')
+  return res.json()
+}
+
+export async function clearHistory(): Promise<{ freedBytes: number }> {
+  const res = await fetch('/api/history/clear', { method: 'POST' })
+  if (!res.ok) throw new Error('清空失败')
+  return res.json()
 }

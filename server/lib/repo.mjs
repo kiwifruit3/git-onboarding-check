@@ -8,7 +8,7 @@
  *  - 所有产物按 commit SHA 落到本地缓存目录，天然支持「同一 commit 不重算」。
  */
 import { createWriteStream } from 'node:fs'
-import { mkdir, readdir, rm, stat } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import net from 'node:net'
 import { Readable, Transform } from 'node:stream'
 import * as tarLib from 'tar'
@@ -381,6 +381,98 @@ export async function clearCache({ includeReports = false } = {}) {
   }
   const after = await cacheStats()
   return { freedBytes: Math.max(0, before.totalBytes - after.totalBytes), before, after }
+}
+
+/* ---------------- 历史记录（缓存报告） ---------------- */
+
+function safeReportId(id) {
+  return typeof id === 'string' && /^[\w.~-]+$/.test(id)
+}
+
+function repoFromReport(report) {
+  const r = report?.meta?.repo
+  if (!r || !r.owner || !r.name) return null
+  return { provider: r.provider, owner: r.owner, repo: r.name }
+}
+
+/** 列出本地已保存的历史报告（按分析时间倒序） */
+export async function listCachedReports() {
+  const dir = path.join(CACHE_ROOT, 'reports')
+  let names
+  try {
+    names = await readdir(dir)
+  } catch {
+    return []
+  }
+  const items = []
+  for (const name of names) {
+    if (!name.endsWith('.json')) continue
+    const file = path.join(dir, name)
+    try {
+      const info = await stat(file)
+      const report = JSON.parse(await readFile(file, 'utf8'))
+      const repo = repoFromReport(report)
+      let hasSource = false
+      let sourceBytes = 0
+      if (repo && report.meta?.commit) {
+        const srcDir = sourceDirFor(repo, report.meta.commit)
+        try {
+          hasSource = (await stat(path.join(srcDir, '.ready'))).isFile()
+          if (hasSource) sourceBytes = await dirSize(srcDir)
+        } catch {}
+      }
+      items.push({
+        id: name.replace(/\.json$/, ''),
+        slug: report.meta?.repo?.slug || name,
+        provider: report.meta?.repo?.provider || '',
+        commit: report.meta?.commit || '',
+        commitShort: report.meta?.commitShort || '',
+        analyzedAt: report.meta?.analyzedAt || '',
+        score: report.score?.total ?? null,
+        grade: report.score?.grade ?? null,
+        riskTotal: report.risk?.total ?? 0,
+        reportBytes: info.size,
+        hasSource,
+        sourceBytes,
+      })
+    } catch {
+      /* 跳过损坏的记录 */
+    }
+  }
+  items.sort((a, b) => String(b.analyzedAt).localeCompare(String(a.analyzedAt)))
+  return items
+}
+
+/** 读取单条历史报告 */
+export async function readCachedReportById(id) {
+  if (!safeReportId(id)) return null
+  try {
+    return JSON.parse(await readFile(path.join(CACHE_ROOT, 'reports', `${id}.json`), 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+/** 删除单条历史记录（连同它对应的源码快照） */
+export async function deleteCachedReport(id) {
+  if (!safeReportId(id)) throw new Error('非法的记录 ID')
+  const file = path.join(CACHE_ROOT, 'reports', `${id}.json`)
+  const report = JSON.parse(await readFile(file, 'utf8'))
+  const repo = repoFromReport(report)
+  let freedBytes = (await stat(file)).size
+  await rm(file, { force: true })
+  if (repo && report.meta?.commit) {
+    const srcDir = sourceDirFor(repo, report.meta.commit)
+    try {
+      freedBytes += await dirSize(srcDir)
+    } catch {}
+    await rm(srcDir, { recursive: true, force: true }).catch(() => {})
+  }
+  return {
+    slug: report.meta?.repo?.slug || id,
+    commitShort: report.meta?.commitShort || '',
+    freedBytes,
+  }
 }
 
 async function downloadViaFetch(url, file) {

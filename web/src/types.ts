@@ -101,6 +101,21 @@ export interface AiAdvice {
   error?: string
 }
 
+export interface HistoryItem {
+  id: string
+  slug: string
+  provider: string
+  commit: string
+  commitShort: string
+  analyzedAt: string
+  score: number | null
+  grade: string | null
+  riskTotal: number
+  reportBytes: number
+  hasSource: boolean
+  sourceBytes: number
+}
+
 export interface CacheStats {
   dir: string
   sources: number
@@ -140,6 +155,7 @@ export interface Report {
     staleReason?: string
     demo?: boolean
     demoNote?: string
+    history?: boolean
     scanner: { name: string; version: string; schemaVersion: number }
   }
   score: {

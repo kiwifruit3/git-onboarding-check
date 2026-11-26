@@ -156,6 +156,18 @@ export function ReportView({
         </div>
       )}
 
+      {meta.history && (
+        <div className="banner banner-history">
+          <Icon name="doc" size={16} />
+          <div>
+            <b>本地历史记录</b>
+            <span>
+              这是本地保存的历史报告（commit {meta.commitShort}）。点「检查更新」可看远端是否有新提交，点「重新体检」可重新分析。
+            </span>
+          </div>
+        </div>
+      )}
+
       <nav className="tabs">
         {TABS.map((t) => (
           <button
