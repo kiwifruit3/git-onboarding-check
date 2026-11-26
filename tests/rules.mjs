@@ -3,7 +3,11 @@
  * 规则单测：在临时目录构造一个「问题仓库」，断言六类规则都能命中预期问题。
  * 不依赖网络，可放进 CI。
  *
- *   node scripts/test-rules.mjs
+ *   npm test
+ *
+ * 注意：本文件里的密钥、路径、.env 内容全部是随机编造的测试数据（fixture），
+ * 只用于验证「能不能检测到」和「检测后有没有正确脱敏」，不指向任何真实账号或服务。
+ * 这些字符串只写进系统临时目录，测试结束即删除，不会上传到任何地方。
  */
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
@@ -59,6 +63,7 @@ const PACKAGE_JSON = JSON.stringify(
   2,
 )
 
+// ↓ 下面两行是假数据：随机编造的密钥字符串，仅用于测试「能不能检测到硬编码密钥」
 const APP_JS = `const baseDir = "C:\\\\Users\\\\alice\\\\projects\\\\demo";
 const apiKey = "sk-proj-9fK2mQ7pLx4vN8sR3tY6wB1cD5gH0jZ";
 module.exports = { baseDir, apiKey };
@@ -66,6 +71,7 @@ module.exports = { baseDir, apiKey };
 
 const WINDOWS_BAT = '@echo off\r\ncd /d D:\\work\\demo\r\nnpm run dev\r\n'
 
+// 假 .env：同样只是为了测试「.env 入库」规则
 const ENV_FILE = 'OPENAI_API_KEY=sk-proj-Zzzz1111Yyyy2222Xxxx3333Wwww4444\n'
 
 let failures = 0
