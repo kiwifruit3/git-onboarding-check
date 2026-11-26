@@ -101,6 +101,17 @@ export interface AiAdvice {
   error?: string
 }
 
+export interface CacheStats {
+  dir: string
+  sources: number
+  reports: number
+  srcBytes: number
+  reportBytes: number
+  totalBytes: number
+  keepSources: boolean
+  sourceTTLDays: number
+}
+
 export interface DemoSummary {
   id: string
   slug: string

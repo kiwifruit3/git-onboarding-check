@@ -185,6 +185,21 @@ const server = http.createServer(async (req, res) => {
       return
     }
 
+    if (pathname === '/api/cache' && req.method === 'GET') {
+      const { cacheStats } = await import('./lib/repo.mjs')
+      json(res, 200, await cacheStats())
+      return
+    }
+
+    if (pathname === '/api/cache/clean' && req.method === 'POST') {
+      const body = await readBody(req)
+      const { clearCache } = await import('./lib/repo.mjs')
+      const result = await clearCache({ includeReports: !!body?.includeReports })
+      console.log(`[cache] 已清理，释放 ${(result.freedBytes / 1024 / 1024).toFixed(1)}MB`)
+      json(res, 200, result)
+      return
+    }
+
     if (pathname === '/api/demo' && req.method === 'GET') {
       const reports = await loadDemoReports()
       const demos = Object.entries(reports).map(([id, r]) => ({
@@ -284,6 +299,17 @@ server.listen(PORT, HOST, () => {
   console.log(`RepoPulse API 已启动: http://${HOST}:${PORT}`)
   console.log(`  AI 通道: ${aiProviderName() || '未配置（使用内置规则引擎）'}`)
   console.log(`  静态资源: ${DIST}`)
+  // 启动时清理过期源码快照（默认 TTL 7 天）
+  import('./lib/repo.mjs')
+    .then(({ cleanupExpiredSources }) => cleanupExpiredSources())
+    .then((result) => {
+      if (result.removed > 0) {
+        console.log(
+          `  已清理 ${result.removed} 份过期源码快照（${(result.bytes / 1024 / 1024).toFixed(1)}MB，TTL ${result.ttlDays} 天）`,
+        )
+      }
+    })
+    .catch(() => {})
 })
 
 for (const sig of ['SIGINT', 'SIGTERM']) {

@@ -340,12 +340,44 @@ git-onboarding-check/
 | `REPOPULSE_NO_PROXY` | – | 设为 `1` 强制直连 |
 | `REPOPULSE_MIRROR` | – | 镜像/加速前缀，用于源码包下载与 clone。支持 `https://ghproxy.net/`（前缀拼接）或 `https://ghproxy.net/{url}`（模板） |
 | `REPOPULSE_FORCE_OFFLINE` | – | 设为 `1` 强制离线：不访问网络，只返回历史缓存报告（用于断网演示 / 内网环境） |
+| `REPOPULSE_KEEP_SOURCES` | `1` | 设为 `0` 时，分析完成后立即删除源码快照，只保留报告 |
+| `REPOPULSE_SOURCE_TTL_DAYS` | `7` | 源码快照保留天数，启动时与每小时分析时清理过期快照 |
 | `GITHUB_TOKEN` | – | 仅在 `ls-remote` 失败时用于 API 兜底 |
 | `OPENAI_API_KEY` / `OPENAI_BASE_URL` / `OPENAI_MODEL` | – | OpenAI 兼容通道，用于 AI 建议 |
 | `DEEPSEEK_API_KEY` / `DEEPSEEK_MODEL` | – | DeepSeek 通道 |
 | `DASHSCOPE_API_KEY` / `DASHSCOPE_MODEL` | – | 通义千问兼容模式 |
 
 示例：`OPENAI_API_KEY=sk-xxx OPENAI_MODEL=gpt-4o-mini npm start`
+
+## 数据与本地缓存
+
+工具只分析**公开仓库**，所有数据都留在你自己的机器上（除了从 GitHub 拉取源码这一步）。
+
+| 内容 | 位置 | 保留策略 |
+| --- | --- | --- |
+| 源码快照 | `.cache/src/{provider}-{owner}-{repo}-{sha12}/` | 同一仓库保留最近 **4 份**；超过 **7 天**（可配）的自动清理 |
+| 体检报告 | `.cache/reports/{...}.json` | 按 commit 长期保留（体积小，用于离线查看与更新对比） |
+| 临时压缩包 | `.cache/tmp/` | 解压后立即删除 |
+
+控制方式：
+
+```bash
+# 分析完立即删除该次源码快照（只留报告）
+REPOPULSE_KEEP_SOURCES=0 npm start
+
+# 自定义过期天数（默认 7 天）
+REPOPULSE_SOURCE_TTL_DAYS=3 npm start
+
+# 手动清理：默认只删源码快照与临时文件，报告保留
+npm run clean
+# 连报告一起删（完全清空）
+npm run clean -- --all
+```
+
+页脚也会显示「本地缓存 xx MB（源码快照 N 份 / 报告 N 份）」，点「清理代码快照」即可一键清空源码快照。
+
+> **关于 AI 建议**：未配置大模型时完全离线；配置了 `OPENAI_API_KEY` 等之后，发送给模型的是**扫描结果摘要**
+> （仓库名、评分、风险标题、文件路径、整改建议），**不会发送源码内容**。
 
 ## 已知限制
 

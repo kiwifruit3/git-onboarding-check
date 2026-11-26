@@ -283,6 +283,106 @@ async function pruneSources(repo) {
   }
 }
 
+async function dirSize(dir) {
+  let total = 0
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return 0
+  }
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    try {
+      if (entry.isDirectory()) total += await dirSize(full)
+      else total += (await stat(full)).size
+    } catch {}
+  }
+  return total
+}
+
+function sourceTTLDays() {
+  const raw = Number(process.env.REPOPULSE_SOURCE_TTL_DAYS)
+  return Number.isFinite(raw) && raw > 0 ? raw : SOURCE_TTL_DAYS
+}
+
+function keepSources() {
+  return process.env.REPOPULSE_KEEP_SOURCES !== '0'
+}
+
+/**
+ * 清理过期源码快照（默认 7 天，可用 REPOPULSE_SOURCE_TTL_DAYS 调整）。
+ * 报告缓存不在这里删——它是「体检结论」，体积小且可离线查看。
+ */
+export async function cleanupExpiredSources(ttlDays = sourceTTLDays()) {
+  const dir = path.join(CACHE_ROOT, 'src')
+  let entries
+  try {
+    entries = await readdir(dir)
+  } catch {
+    return { removed: 0, bytes: 0, ttlDays }
+  }
+  const cutoff = Date.now() - ttlDays * 24 * 60 * 60 * 1000
+  let removed = 0
+  let bytes = 0
+  for (const name of entries) {
+    const full = path.join(dir, name)
+    try {
+      const info = await stat(full)
+      if (info.mtimeMs < cutoff) {
+        bytes += await dirSize(full)
+        await rm(full, { recursive: true, force: true })
+        removed += 1
+      }
+    } catch {}
+  }
+  return { removed, bytes, ttlDays }
+}
+
+/** 分析完成后立即删除该 commit 的源码快照（REPOPULSE_KEEP_SOURCES=0 时） */
+export async function deleteSource(repo, sha) {
+  const dir = sourceDirFor(repo, sha)
+  await rm(dir, { recursive: true, force: true }).catch(() => {})
+}
+
+/** 缓存占用统计（给前端「本地缓存」提示用） */
+export async function cacheStats() {
+  const srcDir = path.join(CACHE_ROOT, 'src')
+  const reportDir = path.join(CACHE_ROOT, 'reports')
+  const tmpDir = path.join(CACHE_ROOT, 'tmp')
+  const count = async (dir) => {
+    try {
+      return (await readdir(dir)).length
+    } catch {
+      return 0
+    }
+  }
+  const srcBytes = await dirSize(srcDir)
+  const reportBytes = await dirSize(reportDir)
+  return {
+    dir: CACHE_ROOT,
+    sources: await count(srcDir),
+    reports: await count(reportDir),
+    srcBytes,
+    reportBytes,
+    totalBytes: srcBytes + reportBytes + (await dirSize(tmpDir)),
+    keepSources: keepSources(),
+    sourceTTLDays: sourceTTLDays(),
+  }
+}
+
+/** 清理缓存：默认只清源码快照与临时文件，报告可选 */
+export async function clearCache({ includeReports = false } = {}) {
+  const before = await cacheStats()
+  await rm(path.join(CACHE_ROOT, 'src'), { recursive: true, force: true }).catch(() => {})
+  await rm(path.join(CACHE_ROOT, 'tmp'), { recursive: true, force: true }).catch(() => {})
+  if (includeReports) {
+    await rm(path.join(CACHE_ROOT, 'reports'), { recursive: true, force: true }).catch(() => {})
+  }
+  const after = await cacheStats()
+  return { freedBytes: Math.max(0, before.totalBytes - after.totalBytes), before, after }
+}
+
 async function downloadViaFetch(url, file) {
   const res = await fetch(url, {
     redirect: 'follow',

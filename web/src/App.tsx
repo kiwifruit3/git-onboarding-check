@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { analyze, getDemo, health, listDemos } from './api'
+import { analyze, cleanCache, getCacheStats, getDemo, health, listDemos } from './api'
 import { ReportView } from './components/Report'
 import { Icon, scoreColor } from './components/ui'
-import type { DemoSummary, Report } from './types'
+import type { CacheStats, DemoSummary, Report } from './types'
 
 const EXAMPLES = [
   { label: 'expressjs/express', url: 'https://github.com/expressjs/express' },
@@ -28,6 +28,8 @@ export default function App() {
   const [error, setError] = useState<{ message: string; hint?: string } | null>(null)
   const [aiInfo, setAiInfo] = useState<{ aiProvider: string | null; version: string } | null>(null)
   const [demos, setDemos] = useState<DemoSummary[]>([])
+  const [cache, setCache] = useState<CacheStats | null>(null)
+  const [cleaning, setCleaning] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const lastUrl = useRef('')
 
@@ -38,6 +40,28 @@ export default function App() {
     listDemos()
       .then(setDemos)
       .catch(() => setDemos([]))
+    getCacheStats()
+      .then(setCache)
+      .catch(() => setCache(null))
+  }, [])
+
+  const refreshCache = useCallback(() => {
+    getCacheStats()
+      .then(setCache)
+      .catch(() => setCache(null))
+  }, [])
+
+  const doCleanCache = useCallback(async () => {
+    if (!window.confirm('将删除本机缓存的所有仓库源码快照（报告会保留）。确定继续？')) return
+    setCleaning(true)
+    try {
+      const next = await cleanCache(false)
+      setCache(next)
+    } catch {
+      /* 忽略，下次刷新会重新拉取 */
+    } finally {
+      setCleaning(false)
+    }
   }, [])
 
   useEffect(() => {
@@ -65,6 +89,7 @@ export default function App() {
     } finally {
       setLoading(false)
       setRefreshing(false)
+      refreshCache()
     }
   }, [])
 
@@ -240,10 +265,27 @@ export default function App() {
         <span>
           RepoPulse · 静态扫描，不上传代码 · 评分模型与规则说明见 <code className="mono">README.md</code>
         </span>
-        <span className="footer-meta">Node.js + React · 静态扫描 · 零外部 CDN 依赖</span>
+        <span className="footer-meta">
+          Node.js + React · 静态扫描 · 零外部 CDN 依赖
+          {cache && cache.totalBytes > 0 && (
+            <span className="cache-info">
+              {' · '}本地缓存 {formatBytes(cache.totalBytes)}（源码快照 {cache.sources} 份 / 报告 {cache.reports} 份）
+              <button type="button" className="link-btn" onClick={doCleanCache} disabled={cleaning}>
+                {cleaning ? '清理中…' : '清理代码快照'}
+              </button>
+            </span>
+          )}
+        </span>
       </footer>
     </div>
   )
+}
+
+function formatBytes(n: number) {
+  if (!Number.isFinite(n) || n <= 0) return '0 B'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
 function LoadingPanel({ url, stage, elapsed }: { url: string; stage: number; elapsed: number }) {

@@ -3,7 +3,15 @@
  */
 import { generateAiAdvice } from './ai.mjs'
 import { matchIgnore, parseIgnore } from './ignore.mjs'
-import { ensureSource, findLatestCachedReport, readCachedReport, resolveHead, writeCachedReport } from './repo.mjs'
+import {
+  cleanupExpiredSources,
+  deleteSource,
+  ensureSource,
+  findLatestCachedReport,
+  readCachedReport,
+  resolveHead,
+  writeCachedReport,
+} from './repo.mjs'
 import { analyzeDeps } from './rules/deps.mjs'
 import { analyzeHygiene } from './rules/hygiene.mjs'
 import { analyzePaths } from './rules/paths.mjs'
@@ -17,6 +25,22 @@ import { collectFiles } from './walk.mjs'
 
 export const SCHEMA_VERSION = 8
 const MAX_RISK_ITEMS = 120
+let lastCleanupAt = 0
+
+/** 每小时最多触发一次过期快照清理（异步执行，不阻塞分析） */
+function maybeCleanupSources() {
+  if (Date.now() - lastCleanupAt < 60 * 60 * 1000) return
+  lastCleanupAt = Date.now()
+  cleanupExpiredSources()
+    .then((result) => {
+      if (result.removed > 0) {
+        console.log(
+          `[cache] 已清理 ${result.removed} 份过期源码快照（${(result.bytes / 1024 / 1024).toFixed(1)}MB，TTL ${result.ttlDays} 天）`,
+        )
+      }
+    })
+    .catch(() => {})
+}
 
 function pickRootPackageJson(files) {
   const file = files.find((f) => !f.path.includes('/') && /^package\.json$/i.test(f.name))
@@ -77,6 +101,7 @@ function staleReport(cached, error, repo) {
 
 export async function analyzeRepository(input, { refresh = false, withAi = true } = {}) {
   const startedAt = Date.now()
+  maybeCleanupSources()
   const repo = parseRepoUrl(input)
 
   let head
@@ -271,6 +296,11 @@ export async function analyzeRepository(input, { refresh = false, withAi = true 
     : { enabled: false, source: 'disabled', provider: 'none', note: '本次未生成 AI 建议' }
 
   await writeCachedReport(repo, head.sha, report).catch(() => {})
+  // REPOPULSE_KEEP_SOURCES=0：分析完立刻删掉源码快照，只留报告
+  if (process.env.REPOPULSE_KEEP_SOURCES === '0') {
+    await deleteSource(repo, head.sha)
+    report.meta.sourceDeleted = true
+  }
   return report
 }
 

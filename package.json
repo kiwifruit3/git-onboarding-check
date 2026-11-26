@@ -16,6 +16,7 @@
     "test": "node tests/rules.mjs",
     "smoke": "node scripts/smoke.mjs",
     "demo:build": "node scripts/build-demo.mjs",
+    "clean": "node scripts/clean.mjs",
     "typecheck": "node node_modules/typescript/bin/tsc --noEmit"
   },
   "dependencies": {

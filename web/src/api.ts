@@ -1,4 +1,4 @@
-import type { DemoSummary, Report } from './types'
+import type { CacheStats, DemoSummary, Report } from './types'
 
 export interface ApiError extends Error {
   hint?: string
@@ -59,4 +59,26 @@ export async function getDemo(id: string): Promise<Report> {
   const res = await fetch(`/api/demo/${encodeURIComponent(id)}`)
   if (!res.ok) throw new Error('示例报告加载失败')
   return res.json()
+}
+
+/** 本地缓存占用（源码快照 + 报告） */
+export async function getCacheStats(): Promise<CacheStats | null> {
+  try {
+    const res = await fetch('/api/cache')
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function cleanCache(includeReports = false): Promise<CacheStats | null> {
+  const res = await fetch('/api/cache/clean', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ includeReports }),
+  })
+  if (!res.ok) throw new Error('清理失败')
+  const data = await res.json()
+  return data?.after ?? null
 }
