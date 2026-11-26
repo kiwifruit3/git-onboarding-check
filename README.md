@@ -324,7 +324,7 @@ git-onboarding-check/
 
 | 仓库 | 得分 | 等级 | 主要发现 |
 | --- | ---: | --- | --- |
-| [kiwifruit3/git-onboarding-check](https://github.com/kiwifruit3/git-onboarding-check)（自检） | 93 | A | 仅剩文档与规则定义中的示例路径命中，属于预期行为 |
+| [kiwifruit3/git-onboarding-check](https://github.com/kiwifruit3/git-onboarding-check)（自检，commit `07d2543`） | 97 | A | 仅剩文档与测试夹具中的示例路径命中，属于预期行为 |
 | [expressjs/express](https://github.com/expressjs/express) | 86 | A | 库项目，未提交 lockfile（影响较小）；README 缺少运行说明 |
 | [gitleaks/gitleaks](https://github.com/gitleaks/gitleaks) | 89 | A | 243 处「疑似密钥」全部识别为规则库样例数据，仅作待复核线索 |
 | [redis-windows/redis-windows](https://github.com/redis-windows/redis-windows) | 65 | C | 只有 `start.bat` 启动入口，无跨平台等价脚本；34 处硬编码路径 |
