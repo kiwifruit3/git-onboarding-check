@@ -146,16 +146,6 @@ export function ReportView({
         </div>
       )}
 
-      {meta.demo && (
-        <div className="banner banner-demo">
-          <Icon name="doc" size={16} />
-          <div>
-            <b>离线示例报告</b>
-            <span>{meta.demoNote || '预生成快照，不会实时更新；可直接体验全部功能。'}</span>
-          </div>
-        </div>
-      )}
-
       {meta.history && (
         <div className="banner banner-history">
           <Icon name="doc" size={16} />
