@@ -14,6 +14,12 @@ import { ReportView } from './components/Report'
 import { Icon, scoreColor } from './components/ui'
 import type { DemoSummary, HistoryItem, Report } from './types'
 
+const EXAMPLES = [
+  { label: 'expressjs/express', url: 'https://github.com/expressjs/express' },
+  { label: 'redis-windows/redis-windows', url: 'https://github.com/redis-windows/redis-windows' },
+  { label: 'Plazmaz/leaky-repo', url: 'https://github.com/Plazmaz/leaky-repo' },
+]
+
 const STAGES = [
   '解析仓库地址',
   '读取 HEAD commit',
@@ -211,6 +217,15 @@ export default function App() {
                 {!loading && <Icon name="arrow" size={16} />}
               </button>
             </form>
+
+            <div className="examples">
+              <span>试试：</span>
+              {EXAMPLES.map((e) => (
+                <button key={e.url} type="button" onClick={() => run(e.url)} disabled={loading}>
+                  {e.label}
+                </button>
+              ))}
+            </div>
 
             <ul className="features">
               <li>
