@@ -145,6 +145,9 @@ export interface Report {
     textFiles: number
     sizeBytes: number
     truncated: boolean
+    skippedDirs?: number
+    ignored?: number
+    ignorePatterns?: string[]
     readmeChars: number
     depsCount: number
     ecosystems: string[]

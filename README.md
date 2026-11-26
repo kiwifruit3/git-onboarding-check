@@ -191,6 +191,23 @@ curl http://127.0.0.1:8787/api/health
 
 `.gitignore`、LICENSE、CI 配置、`.env.example`（README 提到环境变量但缺少样例时提示）。
 
+### 7. `.repopulseignore`（跳过不想被扫的文件）
+
+在仓库根目录放一个 `.repopulseignore`，命中的文件不参与规则扫描，报告会注明忽略了多少个：
+
+```gitignore
+# 忽略目录
+demo/
+vendor/
+# 忽略任意层级的匹配文件
+*.min.js
+# 路径通配
+docs/generated/**
+```
+
+用途：忽略 vendored 代码、生成产物、测试 fixture——它们命中规则通常不代表真实问题。
+本仓库自身就用它跳过了 `demo/`（离线示例报告里含示例密钥与路径）。
+
 ## 更新跟踪设计
 
 > 题目第 5 条要求。当前已实现 **commit 级缓存 + 手动/接口触发的更新检测**；文件级增量扫描作为设计给出（未实现的部分会明确标注）。

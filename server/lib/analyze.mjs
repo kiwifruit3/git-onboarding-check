@@ -2,6 +2,7 @@
  * 分析编排：仓库 → 源码 → 文件集 → 六类规则 → 评分 → 风险清单 → AI 建议。
  */
 import { generateAiAdvice } from './ai.mjs'
+import { matchIgnore, parseIgnore } from './ignore.mjs'
 import { ensureSource, findLatestCachedReport, readCachedReport, resolveHead, writeCachedReport } from './repo.mjs'
 import { analyzeDeps } from './rules/deps.mjs'
 import { analyzeHygiene } from './rules/hygiene.mjs'
@@ -14,7 +15,7 @@ import { buildHighlights, computeScore } from './score.mjs'
 import { parseRepoUrl, SEVERITY_ORDER } from './util.mjs'
 import { collectFiles } from './walk.mjs'
 
-export const SCHEMA_VERSION = 7
+export const SCHEMA_VERSION = 8
 const MAX_RISK_ITEMS = 120
 
 function pickRootPackageJson(files) {
@@ -107,7 +108,25 @@ export async function analyzeRepository(input, { refresh = false, withAi = true 
     if (stale) return staleReport(stale, error, repo)
     throw error
   }
-  const { files, stats } = await collectFiles(source.dir)
+  const collected = await collectFiles(source.dir)
+  const stats = collected.stats
+
+  // .repopulseignore：被忽略的文件不参与扫描（报告里会说明忽略了多少个）
+  const ignoreFile = collected.files.find((f) => !f.path.includes('/') && f.name === '.repopulseignore')
+  const ignorePatterns = ignoreFile?.text ? parseIgnore(ignoreFile.text) : []
+  let files = collected.files
+  let ignoredCount = 0
+  if (ignorePatterns.length) {
+    files = files.filter((file) => {
+      if (file.path === '.repopulseignore') return true
+      const hit = matchIgnore(ignorePatterns, file.path)
+      if (hit) ignoredCount += 1
+      return !hit
+    })
+    stats.totalFiles = files.length
+    stats.textFiles = files.filter((f) => f.text).length
+    stats.ignored = ignoredCount
+  }
 
   const pkg = pickRootPackageJson(files)
   const readme = pickReadmeText(files)
@@ -207,6 +226,8 @@ export async function analyzeRepository(input, { refresh = false, withAi = true 
       sizeBytes: stats.totalBytes,
       truncated: stats.truncated,
       skippedDirs: stats.skippedDirs,
+      ignored: ignoredCount,
+      ignorePatterns,
       readmeChars: readmeResult.meta.chars,
       depsCount,
       ecosystems: (depsResult.ecosystems || []).map((e) => e.name),
@@ -237,6 +258,8 @@ export async function analyzeRepository(input, { refresh = false, withAi = true 
     },
     scan: {
       dirs: buildDirSummary(files),
+      ignored: ignoredCount,
+      ignorePatterns,
       files: files.slice(0, 600).map((f) => ({ path: f.path, kind: f.kind, size: f.size })),
     },
     ai: null,

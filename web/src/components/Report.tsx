@@ -766,7 +766,9 @@ function FilesTab({ report }: { report: Report }) {
     <section className="card">
       <SectionHead
         title="文件扫描"
-        desc={`共扫描 ${stats.files} 个文件，已跳过 node_modules / dist / vendor 等目录`}
+        desc={`共扫描 ${stats.files} 个文件，已跳过 node_modules / dist / vendor 等目录${
+          stats.ignored ? `；.repopulseignore 忽略 ${stats.ignored} 个文件` : ''
+        }`}
       />
       <div className="stat-chips">
         {scan.dirs.map((d) => (
