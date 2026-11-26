@@ -275,8 +275,8 @@ git-onboarding-check/
 │   └── src/{App.tsx, components/, styles.css, export.ts}
 ├── scripts/
 │   ├── dev.mjs                # 同时拉起 API 与 Vite
-│   ├── test-rules.mjs         # 规则单测（离线，构造问题仓库断言命中）
 │   └── smoke.mjs              # 命令行体检（也可做回归）
+├── tests/rules.mjs            # 规则单测（离线，构造问题仓库断言命中）
 ├── .github/workflows/ci.yml   # CI：npm test + 类型检查 + 构建
 ├── docs/screenshots/          # 界面截图
 ├── dist/                      # 构建产物（npm run build）
